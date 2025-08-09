@@ -1,0 +1,131 @@
+import path from "path";
+import fs from "fs";
+import pino from "pino";
+import Ajv, { ValidateFunction } from "ajv";
+import { v4 as uuidv4 } from "uuid";
+
+const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
+
+type Tool = {
+  name: string;
+  schemaPath: string;
+  validate?: ValidateFunction;
+  impl?: (input: any) => Promise<any>;
+};
+
+function loadSchemas(dir: string) {
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  const schemasDir = path.resolve(dir);
+  const tools: Record<string, Tool> = {};
+
+  for (const f of fs.readdirSync(schemasDir)) {
+    if (!f.endsWith(".schema.json")) continue;
+    const fullname = path.join(schemasDir, f);
+    const raw = fs.readFileSync(fullname, "utf8");
+    const json = JSON.parse(raw);
+    const name = json.$id || f.replace(".schema.json", "");
+    const validate = ajv.compile(json);
+    tools[name] = { name, schemaPath: fullname, validate };
+  }
+
+  return { ajv, tools };
+}
+
+function makeStubImplementations(tools: Record<string, Tool>) {
+  // Minimal deterministic stubs to allow smoke tests
+  if (tools["/scan/list_devices"]) {
+    tools["/scan/list_devices"].impl = async () => {
+      return [
+        {
+          id: "sane:dummy:0",
+          vendor: "Acme",
+          model: "VirtualScanner1000",
+          sane_name: "vscan0",
+          capabilities: { adf: true, duplex: true, color_modes: ["Color", "Gray"], resolutions: [200, 300, 600], page_sizes: ["A4", "Letter"] },
+        },
+      ];
+    };
+  }
+
+  if (tools["/scan/start_scan_job"]) {
+    tools["/scan/start_scan_job"].impl = async (input: any) => {
+      const runId = uuidv4();
+      const jobId = `job-${runId}`;
+      const runDir = input.tmp_dir ? path.resolve(input.tmp_dir, jobId) : path.resolve("inbox", jobId);
+      // No fs side effects here — stub only
+      return { job_id: jobId, run_dir: runDir, state: "running" };
+    };
+  }
+
+  return tools;
+}
+
+export async function main() {
+  const projectRoot = path.resolve(__dirname, "..");
+  const schemasDir = path.join(projectRoot, "schemas");
+  if (!fs.existsSync(schemasDir)) {
+    logger.error({ schemasDir }, "Schemas directory not found");
+    process.exit(1);
+  }
+
+  const { ajv, tools } = loadSchemas(schemasDir);
+  makeStubImplementations(tools);
+
+  logger.info({ tools: Object.keys(tools) }, "scan-mcp starting (stub)");
+
+  // Simple CLI surface for smoke tests:
+  //   - `node src/server.ts list` -> list tools
+  //   - `node src/server.ts call <toolId> '{"foo": "bar"}'` -> validate & run stub impl
+  const argv = process.argv.slice(2);
+
+  if (argv[0] === "list") {
+    console.log("tools:");
+    for (const k of Object.keys(tools)) {
+      console.log("-", k);
+    }
+    process.exit(0);
+  }
+
+  if (argv[0] === "call") {
+    const toolId = argv[1];
+    const payload = argv[2] ? JSON.parse(argv[2]) : {};
+    const tool = tools[toolId];
+    if (!tool) {
+      console.error("tool not found:", toolId);
+      process.exit(2);
+    }
+
+    const runId = uuidv4();
+    logger.info({ run_id: runId, tool: toolId, payload }, "tool call received");
+
+    if (!tool.validate!(payload)) {
+      logger.error({ run_id: runId, errors: tool.validate!.errors }, "validation failed");
+      console.error(JSON.stringify({ ok: false, errors: tool.validate!.errors }, null, 2));
+      process.exit(3);
+    }
+
+    try {
+      const result = await tool.impl!(payload);
+      logger.info({ run_id: runId, result }, "tool executed");
+      console.log(JSON.stringify({ ok: true, result }, null, 2));
+      process.exit(0);
+    } catch (err) {
+      logger.error({ run_id: runId, err }, "tool implementation error");
+      console.error(JSON.stringify({ ok: false, error: String(err) }, null, 2));
+      process.exit(4);
+    }
+  }
+
+  // Default: print basic info and exit
+  console.log("scan-mcp (stub) - available commands:");
+  console.log("  node src/server.ts list");
+  console.log("  node src/server.ts call <toolId> '<json-payload>'");
+  process.exit(0);
+}
+
+if (require.main === module) {
+  main().catch((err) => {
+    logger.error({ err }, "unexpected error");
+    process.exit(1);
+  });
+}

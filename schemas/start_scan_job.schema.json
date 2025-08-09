@@ -1,0 +1,37 @@
+{
+  "$id": "/scan/start_scan_job",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "start_scan_job input",
+  "type": "object",
+  "description": "Parameters to start a scan job",
+  "additionalProperties": false,
+  "properties": {
+    "device_id": { "type": "string" },
+    "resolution_dpi": { "type": "integer", "minimum": 50, "maximum": 1200 },
+    "color_mode": { "type": "string", "enum": ["Color", "Gray", "Lineart"] },
+    "source": { "type": "string", "enum": ["Flatbed", "ADF", "ADF Duplex"] },
+    "duplex": { "type": "boolean" },
+    "page_size": { "type": "string", "enum": ["Letter", "A4", "Legal", "Custom"] },
+    "custom_size_mm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "number", "minimum": 1 },
+        "height": { "type": "number", "minimum": 1 }
+      }
+    },
+    "doc_break_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["blank_page", "page_count", "timer", "barcode", "none"] },
+        "blank_threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "page_count": { "type": "integer", "minimum": 1 },
+        "timer_ms": { "type": "integer", "minimum": 0 },
+        "barcode_values": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "output_format": { "type": "string", "default": "tiff" },
+    "tmp_dir": { "type": "string" }
+  }
+}

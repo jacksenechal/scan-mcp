@@ -1,0 +1,9 @@
+{
+  "$id": "/scan/list_devices",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "list_devices input",
+  "type": "object",
+  "description": "No input parameters expected. Accept empty object.",
+  "additionalProperties": false,
+  "properties": {}
+}
