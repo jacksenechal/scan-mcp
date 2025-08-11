@@ -1,0 +1,11 @@
+{
+  "$id": "/scan/cancel_job",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "cancel_job input",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "job_id": { "type": "string", "minLength": 1 }
+  },
+  "required": ["job_id"]
+}

@@ -4,7 +4,9 @@ import pino from "pino";
 import Ajv, { ValidateFunction } from "ajv";
 import { v4 as uuidv4 } from "uuid";
 
-const logger = pino({ level: process.env.LOG_LEVEL ?? "info" });
+import { loadConfig } from "./config";
+const config = loadConfig();
+const logger = pino({ level: config.LOG_LEVEL });
 
 type Tool = {
   name: string;
@@ -55,6 +57,13 @@ function makeStubImplementations(tools: Record<string, Tool>) {
       // No fs side effects here — stub only
       return { job_id: jobId, run_dir: runDir, state: "running" };
     };
+  }
+
+  // Default NotImplemented stub for any declared tool without a specific impl
+  for (const key of Object.keys(tools)) {
+    if (!tools[key].impl) {
+      tools[key].impl = async () => ({ error: "NotImplemented", tool: key });
+    }
   }
 
   return tools;
