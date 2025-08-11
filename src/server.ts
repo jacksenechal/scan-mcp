@@ -79,7 +79,7 @@ export async function main() {
     process.exit(1);
   }
 
-  const { ajv, tools } = loadSchemas(schemasDir);
+  const { tools } = loadSchemas(schemasDir);
   makeStubImplementations(tools);
 
   logger.info({ tools: Object.keys(tools) }, "scan-mcp starting (stub)");
