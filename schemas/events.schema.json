@@ -1,0 +1,12 @@
+{
+  "$id": "/scan/resources/events",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "events resource input",
+  "description": "Retrieve the events JSONL for a given scan job",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "job_id": { "type": "string", "minLength": 1 }
+  },
+  "required": ["job_id"]
+}

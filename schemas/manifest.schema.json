@@ -1,0 +1,12 @@
+{
+  "$id": "/scan/resources/manifest",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "manifest resource input",
+  "description": "Retrieve the manifest JSON for a given scan job",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "job_id": { "type": "string", "minLength": 1 }
+  },
+  "required": ["job_id"]
+}
