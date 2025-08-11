@@ -20,7 +20,7 @@ export function loadConfig(): AppConfig {
     // Throw a compact error message for quick local feedback
     throw new Error(
       "Configuration validation failed: " +
-        parsed.error.errors.map((e: ZodIssue) => `${e.path.join(".")}: ${e.message}`).join("; ")
+        parsed.error.issues.map((e: ZodIssue) => `${e.path.join(".")}: ${e.message}`).join("; ")
     );
   }
   return parsed.data;

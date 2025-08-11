@@ -12,7 +12,7 @@ type Tool = {
   name: string;
   schemaPath: string;
   validate?: ValidateFunction;
-  impl?: (input: any) => Promise<any>;
+  impl?: (input: unknown) => Promise<unknown>;
 };
 
 function loadSchemas(dir: string) {
@@ -50,10 +50,12 @@ function makeStubImplementations(tools: Record<string, Tool>) {
   }
 
   if (tools["/scan/start_scan_job"]) {
-    tools["/scan/start_scan_job"].impl = async (input: any) => {
+    tools["/scan/start_scan_job"].impl = async (input: unknown) => {
       const runId = uuidv4();
       const jobId = `job-${runId}`;
-      const runDir = input.tmp_dir ? path.resolve(input.tmp_dir, jobId) : path.resolve("inbox", jobId);
+      const inRec = (input && typeof input === "object") ? (input as Record<string, unknown>) : {};
+      const tmpDir = typeof inRec["tmp_dir"] === "string" ? inRec["tmp_dir"] as string : undefined;
+      const runDir = tmpDir ? path.resolve(tmpDir, jobId) : path.resolve("inbox", jobId);
       // No fs side effects here — stub only
       return { job_id: jobId, run_dir: runDir, state: "running" };
     };
@@ -97,7 +99,7 @@ export async function main() {
 
   if (argv[0] === "call") {
     const toolId = argv[1];
-    const payload = argv[2] ? JSON.parse(argv[2]) : {};
+    const payload = argv[2] ? (JSON.parse(argv[2]) as unknown) : undefined;
     const tool = tools[toolId];
     if (!tool) {
       console.error("tool not found:", toolId);
