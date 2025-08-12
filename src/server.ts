@@ -140,3 +140,6 @@ if (require.main === module) {
     process.exit(1);
   });
 }
+
+// Expose schema-loading and stub utilities for tests
+export { loadSchemas, makeStubImplementations };
