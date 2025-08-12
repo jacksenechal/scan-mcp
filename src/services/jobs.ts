@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { execa } from "execa";
 import { loadConfig, type AppConfig } from "../config";
+import { listDevices, getDeviceOptions } from "./sane";
 
 export type StartScanInput = {
   device_id?: string;
@@ -32,8 +33,9 @@ export type StartScanResult = {
 
 export async function startScanJob(input: StartScanInput): Promise<StartScanResult> {
   const config = loadConfig();
+  const effective = await resolveEffectiveInput(input, config);
   const id = `job-${uuidv4()}`;
-  const baseDir = input.tmp_dir ? path.resolve(input.tmp_dir) : path.resolve(config.INBOX_DIR);
+  const baseDir = effective.tmp_dir ? path.resolve(effective.tmp_dir) : path.resolve(config.INBOX_DIR);
   const runDir = path.join(baseDir, id);
   fs.mkdirSync(runDir, { recursive: true });
 
@@ -51,15 +53,15 @@ export async function startScanJob(input: StartScanInput): Promise<StartScanResu
     state: "running" | "completed" | "cancelled" | "error";
   } = {
     job_id: id,
-    device_id: input.device_id ?? null,
+    device_id: effective.device_id ?? null,
     created_at: now,
-    params: input,
+    params: effective,
     pages: [] as { index: number; path: string; sha256: string }[],
     documents: [] as { index: number; pages: number[]; path: string; sha256: string }[],
     state: "running" as const,
   };
 
-  appendEvent(eventsPath, { ts: now, type: "job_started", data: { input } });
+  appendEvent(eventsPath, { ts: now, type: "job_started", data: { input: effective } });
 
   if (config.SCAN_MOCK) {
     // Create a couple of fake TIFFs to simulate capture
@@ -82,7 +84,7 @@ export async function startScanJob(input: StartScanInput): Promise<StartScanResu
   }
 
   // Real execution path (not used during tests unless SCAN_MOCK=0)
-  const candidates = planScanCommands(input, runDir, config);
+  const candidates = planScanCommands(effective, runDir, config);
   let ran = false;
   for (const c of candidates) {
     try {
@@ -113,7 +115,7 @@ export async function startScanJob(input: StartScanInput): Promise<StartScanResu
   manifest.pages.push(...pages);
 
   // Segment into documents per doc_break_policy (page_count only for now)
-  const segments = segmentPages(pages.map((p) => p.index), input.doc_break_policy);
+  const segments = segmentPages(pages.map((p) => p.index), effective.doc_break_policy);
   let docIdx = 1;
   for (const seg of segments) {
     const outDoc = path.join(runDir, `doc_${String(docIdx).padStart(4, "0")}.tiff`);
@@ -215,4 +217,37 @@ async function assembleTiff(inputFiles: string[], outPath: string, config: AppCo
     // Fallback: copy the first page
     fs.copyFileSync(inputFiles[0], outPath);
   }
+}
+
+export async function resolveEffectiveInput(input: StartScanInput, config?: AppConfig): Promise<StartScanInput> {
+  const cfg = config ?? loadConfig();
+  const out: StartScanInput = { ...input };
+
+  if (!out.device_id) {
+    const devices = await listDevices();
+    const preferred = devices.find((d) => /fujitsu|scansnap/i.test(`${d.vendor ?? ""} ${d.model ?? ""}`)) || devices[0];
+    if (preferred) out.device_id = preferred.id;
+  }
+
+  if (out.device_id) {
+    try {
+      const opts = await getDeviceOptions(out.device_id);
+      if (!out.source && opts.sources && opts.sources.length) {
+        out.source = (opts.sources.includes("ADF Duplex") ? "ADF Duplex" : opts.sources.includes("ADF") ? "ADF" : opts.sources[0]) as any;
+      }
+      if (!out.resolution_dpi && opts.resolutions && opts.resolutions.length) {
+        out.resolution_dpi = opts.resolutions.includes(300) ? 300 : opts.resolutions[opts.resolutions.length - 1];
+      }
+      if (!out.color_mode && opts.color_modes && opts.color_modes.length) {
+        out.color_mode = (opts.color_modes.includes("Color") ? "Color" : opts.color_modes[0]) as any;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!out.source) out.source = "Flatbed";
+  if (!out.resolution_dpi) out.resolution_dpi = 300;
+
+  return out;
 }

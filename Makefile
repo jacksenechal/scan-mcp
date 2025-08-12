@@ -77,10 +77,21 @@ real-list: build
 # Example: make real-start DEVICE_ID="epjitsu:libusb:001:004" RES=300 SOURCE="ADF Duplex"
 real-start: build
 	$(NVM_ACTIVATE)
-	SCAN_MOCK=0 node dist/server.js call /scan/start_scan_job '{"device_id":"$(DEVICE_ID)","resolution_dpi":$(RES),"source":"$(SOURCE)"}'
+	@if [ -z "$(DEVICE_ID)$(RES)$(SOURCE)" ]; then \
+  echo "No params provided; using server defaults (auto-detect)"; \
+  SCAN_MOCK=0 node dist/server.js call /scan/start_scan_job '{}' ; \
+else \
+  SCAN_MOCK=0 node dist/server.js call /scan/start_scan_job '{"device_id":"$(DEVICE_ID)"'"$$( [ -n "$(RES)" ] && printf ",\"resolution_dpi\":%s" "$(RES)" )"',"source":"$(SOURCE)"}'; \
+fi
 
 .PHONY: mock-start
 mock-start: build
 	$(NVM_ACTIVATE)
 	SCAN_MOCK=1 node dist/server.js call /scan/start_scan_job '{}'
 
+
+
+.PHONY: real-start-auto
+real-start-auto: build
+	$(NVM_ACTIVATE)
+	SCAN_MOCK=0 node dist/server.js call /scan/start_scan_job '{}'
