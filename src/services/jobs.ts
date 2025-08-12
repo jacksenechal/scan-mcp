@@ -3,7 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { execa } from "execa";
-import { loadConfig } from "../config";
+import { loadConfig, type AppConfig } from "../config";
 
 export type StartScanInput = {
   device_id?: string;
@@ -82,20 +82,24 @@ export async function startScanJob(input: StartScanInput): Promise<StartScanResu
   }
 
   // Real execution path (not used during tests unless SCAN_MOCK=0)
-  const bin = config.SCANIMAGE_BIN;
-  const args: string[] = [];
-
-  if (input.device_id) args.push("-d", input.device_id);
-  if (input.resolution_dpi) args.push("--resolution", String(input.resolution_dpi));
-  if (input.color_mode) args.push("--mode", input.color_mode);
-  if (input.source) args.push("--source", input.source);
-  // Always batch pages via scanimage --batch=<pattern>
-  args.push(`--batch=${path.join(runDir, "page_%04d.tiff")}`);
-  args.push("--format=tiff");
-
-  // TODO: map duplex/page_size/custom_size/doc_break_policy appropriately
-
-  await execa(bin, args, { cwd: runDir, shell: false, stdio: "inherit" });
+  const candidates = planScanCommands(input, runDir, config);
+  let ran = false;
+  for (const c of candidates) {
+    try {
+      await execa(c.bin, c.args, { cwd: runDir, shell: false, stdio: "inherit" });
+      ran = true;
+      break;
+    } catch (err) {
+      appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_primary_failed", data: { bin: c.bin, args: c.args, err: String(err) } });
+      continue;
+    }
+  }
+  if (!ran) {
+    manifest.state = "error";
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_error", data: { reason: "all candidates failed" } });
+    return { job_id: id, run_dir: runDir, state: manifest.state };
+  }
 
   // Collect pages and assemble simple manifest
   const pages = fs
@@ -108,15 +112,16 @@ export async function startScanJob(input: StartScanInput): Promise<StartScanResu
     });
   manifest.pages.push(...pages);
 
-  // Placeholder: one document containing all pages; real implementation should respect doc_break_policy
-  const allDoc = path.join(runDir, `doc_0001.tiff`);
-  // If tiffcp available, attempt to assemble; otherwise copy first page as placeholder
-  try {
-    await execa(config.TIFFCP_BIN, [...pages.map((pg) => pg.path), allDoc], { shell: false });
-  } catch {
-    if (pages[0]) fs.copyFileSync(pages[0].path, allDoc);
+  // Segment into documents per doc_break_policy (page_count only for now)
+  const segments = segmentPages(pages.map((p) => p.index), input.doc_break_policy);
+  let docIdx = 1;
+  for (const seg of segments) {
+    const outDoc = path.join(runDir, `doc_${String(docIdx).padStart(4, "0")}.tiff`);
+    const segFiles = seg.map((i) => pages[i - 1]?.path).filter(Boolean) as string[];
+    await assembleTiff(segFiles, outDoc, config);
+    manifest.documents.push({ index: docIdx, pages: seg, path: outDoc, sha256: hashFile(outDoc) });
+    docIdx++;
   }
-  manifest.documents.push({ index: 1, pages: pages.map((p) => p.index), path: allDoc, sha256: hashFile(allDoc) });
 
   manifest.state = "completed";
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
@@ -160,4 +165,54 @@ function hashFile(p: string): string {
 
 function appendEvent(eventsPath: string, evt: Record<string, unknown>) {
   fs.appendFileSync(eventsPath, JSON.stringify(evt) + "\n");
+}
+
+export function planScanCommands(input: StartScanInput, runDir: string, config: AppConfig): { bin: string; args: string[] }[] {
+  const batchPattern = path.join(runDir, "page_%04d.tiff");
+  const baseArgs = buildCommonArgs(input, batchPattern);
+  const wantsAdf = !!(input.source && /ADF/i.test(input.source));
+  if (wantsAdf) {
+    return [
+      { bin: config.SCANADF_BIN, args: baseArgs },
+      { bin: config.SCANIMAGE_BIN, args: baseArgs },
+    ];
+  }
+  return [{ bin: config.SCANIMAGE_BIN, args: baseArgs }];
+}
+
+function buildCommonArgs(input: StartScanInput, batchPattern: string): string[] {
+  const args: string[] = [];
+  if (input.device_id) args.push("-d", input.device_id);
+  if (input.resolution_dpi) args.push("--resolution", String(input.resolution_dpi));
+  if (input.color_mode) args.push("--mode", input.color_mode);
+  if (input.source) args.push("--source", input.source);
+  // Always batch pages; both scanimage and scanadf forward these
+  args.push(`--batch=${batchPattern}`);
+  args.push("--format=tiff");
+  return args;
+}
+
+export function segmentPages(pages: number[], policy?: StartScanInput["doc_break_policy"]): number[][] {
+  if (!policy || !policy.type || policy.type === "none" || !policy.page_count) {
+    return [pages];
+  }
+  if (policy.type === "page_count" && policy.page_count > 0) {
+    const out: number[][] = [];
+    for (let i = 0; i < pages.length; i += policy.page_count) {
+      out.push(pages.slice(i, i + policy.page_count));
+    }
+    return out;
+  }
+  // Future: blank_page/timer/barcode
+  return [pages];
+}
+
+async function assembleTiff(inputFiles: string[], outPath: string, config: AppConfig) {
+  if (inputFiles.length === 0) return;
+  try {
+    await execa(config.TIFFCP_BIN, [...inputFiles, outPath], { shell: false });
+  } catch {
+    // Fallback: copy the first page
+    fs.copyFileSync(inputFiles[0], outPath);
+  }
 }

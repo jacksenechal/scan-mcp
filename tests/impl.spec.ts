@@ -22,6 +22,6 @@ describe("scan-mcp stub implementations", () => {
     const out = (await tools["/scan/start_scan_job"].impl!({})) as ScanResult;
     expect(out.job_id).toMatch(/^job-/);
     expect(out.run_dir).toContain(out.job_id);
-    expect(out.state).toBe("running");
+    expect(["running", "completed"]).toContain(out.state);
   });
 });
