@@ -10,6 +10,8 @@ export const ConfigSchema = z.object({
   SCANADF_BIN: z.string().default("scanadf"),
   TIFFCP_BIN: z.string().default("tiffcp"),
   IM_CONVERT_BIN: z.string().default("convert"),
+  SCAN_EXCLUDE_BACKENDS: z.array(z.string()).default([]),
+  SCAN_PREFER_BACKENDS: z.array(z.string()).default([]),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
@@ -24,6 +26,8 @@ export function loadConfig(): AppConfig {
     SCANADF_BIN: process.env.SCANADF_BIN,
     TIFFCP_BIN: process.env.TIFFCP_BIN,
     IM_CONVERT_BIN: process.env.IM_CONVERT_BIN,
+    SCAN_EXCLUDE_BACKENDS: parseCsv(process.env.SCAN_EXCLUDE_BACKENDS),
+    SCAN_PREFER_BACKENDS: parseCsv(process.env.SCAN_PREFER_BACKENDS),
   };
   const parsed = ConfigSchema.safeParse(env);
   if (!parsed.success) {
@@ -41,4 +45,12 @@ function parseEnvBool(v: string | undefined): boolean | undefined {
   if (v === "1" || v?.toLowerCase() === "true") return true;
   if (v === "0" || v?.toLowerCase() === "false") return false;
   return undefined;
+}
+
+function parseCsv(v: string | undefined): string[] | undefined {
+  if (!v) return undefined;
+  return v
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }

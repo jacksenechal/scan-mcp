@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { execa } from "execa";
 import { loadConfig, type AppConfig } from "../config";
+import { selectDevice } from "./select";
 import { listDevices, getDeviceOptions } from "./sane";
 
 export type StartScanInput = {
@@ -224,9 +225,8 @@ export async function resolveEffectiveInput(input: StartScanInput, config?: AppC
   const out: StartScanInput = { ...input };
 
   if (!out.device_id) {
-    const devices = await listDevices();
-    const preferred = devices.find((d) => /fujitsu|scansnap/i.test(`${d.vendor ?? ""} ${d.model ?? ""}`)) || devices[0];
-    if (preferred) out.device_id = preferred.id;
+    const sel = await selectDevice({ desiredSource: out.source, desiredResolutionDpi: out.resolution_dpi }, cfg);
+    if (sel) out.device_id = sel.deviceId;
   }
 
   if (out.device_id) {
