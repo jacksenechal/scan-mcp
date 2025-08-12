@@ -5,6 +5,8 @@ import Ajv, { ValidateFunction } from "ajv";
 import { v4 as uuidv4 } from "uuid";
 
 import { loadConfig } from "./config";
+import { listDevices, getDeviceOptions } from "./services/sane";
+import { startScanJob, getJobStatus, cancelJob, type StartScanInput } from "./services/jobs";
 const config = loadConfig();
 const logger = pino({ level: config.LOG_LEVEL });
 
@@ -36,28 +38,34 @@ function loadSchemas(dir: string) {
 function makeStubImplementations(tools: Record<string, Tool>) {
   // Minimal deterministic stubs to allow smoke tests
   if (tools["/scan/list_devices"]) {
-    tools["/scan/list_devices"].impl = async () => {
-      return [
-        {
-          id: "sane:dummy:0",
-          vendor: "Acme",
-          model: "VirtualScanner1000",
-          sane_name: "vscan0",
-          capabilities: { adf: true, duplex: true, color_modes: ["Color", "Gray"], resolutions: [200, 300, 600], page_sizes: ["A4", "Letter"] },
-        },
-      ];
-    };
+    tools["/scan/list_devices"].impl = async () => listDevices();
   }
 
   if (tools["/scan/start_scan_job"]) {
-    tools["/scan/start_scan_job"].impl = async (input: unknown) => {
-      const runId = uuidv4();
-      const jobId = `job-${runId}`;
-      const inRec = (input && typeof input === "object") ? (input as Record<string, unknown>) : {};
-      const tmpDir = typeof inRec["tmp_dir"] === "string" ? inRec["tmp_dir"] as string : undefined;
-      const runDir = tmpDir ? path.resolve(tmpDir, jobId) : path.resolve("inbox", jobId);
-      // No fs side effects here — stub only
-      return { job_id: jobId, run_dir: runDir, state: "running" };
+    tools["/scan/start_scan_job"].impl = async (input: unknown) => startScanJob(input as StartScanInput);
+  }
+
+  if (tools["/scan/get_device_options"]) {
+    tools["/scan/get_device_options"].impl = async (input: unknown) => {
+      const rec = (input ?? {}) as Record<string, unknown>;
+      const deviceId = String(rec["device_id"] || "");
+      return getDeviceOptions(deviceId);
+    };
+  }
+
+  if (tools["/scan/get_job_status"]) {
+    tools["/scan/get_job_status"].impl = async (input: unknown) => {
+      const rec = (input ?? {}) as Record<string, unknown>;
+      const jobId = String(rec["job_id"] || "");
+      return getJobStatus(jobId);
+    };
+  }
+
+  if (tools["/scan/cancel_job"]) {
+    tools["/scan/cancel_job"].impl = async (input: unknown) => {
+      const rec = (input ?? {}) as Record<string, unknown>;
+      const jobId = String(rec["job_id"] || "");
+      return cancelJob(jobId);
     };
   }
 

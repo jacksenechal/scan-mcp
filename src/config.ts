@@ -4,7 +4,12 @@ import dotenv from "dotenv";
 
 export const ConfigSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
-  INBOX_DIR: z.string().default("inbox"),
+  INBOX_DIR: z.string().default("scanned_documents/inbox"),
+  SCAN_MOCK: z.boolean().default(true),
+  SCANIMAGE_BIN: z.string().default("scanimage"),
+  SCANADF_BIN: z.string().default("scanadf"),
+  TIFFCP_BIN: z.string().default("tiffcp"),
+  IM_CONVERT_BIN: z.string().default("convert"),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
@@ -14,6 +19,11 @@ export function loadConfig(): AppConfig {
   const env = {
     LOG_LEVEL: process.env.LOG_LEVEL,
     INBOX_DIR: process.env.INBOX_DIR,
+    SCAN_MOCK: parseEnvBool(process.env.SCAN_MOCK),
+    SCANIMAGE_BIN: process.env.SCANIMAGE_BIN,
+    SCANADF_BIN: process.env.SCANADF_BIN,
+    TIFFCP_BIN: process.env.TIFFCP_BIN,
+    IM_CONVERT_BIN: process.env.IM_CONVERT_BIN,
   };
   const parsed = ConfigSchema.safeParse(env);
   if (!parsed.success) {
@@ -24,4 +34,11 @@ export function loadConfig(): AppConfig {
     );
   }
   return parsed.data;
+}
+
+function parseEnvBool(v: string | undefined): boolean | undefined {
+  if (v === undefined) return undefined;
+  if (v === "1" || v?.toLowerCase() === "true") return true;
+  if (v === "0" || v?.toLowerCase() === "false") return false;
+  return undefined;
 }
