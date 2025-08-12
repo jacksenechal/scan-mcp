@@ -24,4 +24,4 @@ Project layout
 
 Notes
 - Current implementation is a stub to allow schema-driven smoke tests. Replace stub impls in `src/server.ts` with production integrations (scanadf/scanimage, tiff assembly, SQLite persistence).
-- Follow the conventions in CONVENTIONS.md at the repo root.
+- Follow the conventions in docs/CONVENTIONS.md; see docs/BLUEPRINT.md for high-level architecture and flows.
