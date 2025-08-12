@@ -14,5 +14,18 @@ export default tseslint.config(
     rules: {
       "no-console": "off"
     }
+  },
+  {
+    files: ["tests/**/*.ts"],
+    languageOptions: {
+      parserOptions: {
+        ecmaVersion: "latest",
+        sourceType: "module"
+      }
+    },
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unused-vars": "off"
+    }
   }
 );

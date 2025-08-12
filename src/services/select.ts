@@ -74,7 +74,7 @@ export async function selectDevice(
         score += 5;
         rationale.push("preferred backend:" + backend);
       }
-    } catch (e) {
+    } catch {
       // If options probing fails, lightly penalize but still consider
       score -= 5;
       rationale.push("options probe failed");
@@ -98,4 +98,3 @@ export async function selectDevice(
   if (!top || !isFinite(top.score)) return null;
   return top;
 }
-

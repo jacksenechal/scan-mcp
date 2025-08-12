@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { execa } from "execa";
 import { loadConfig, type AppConfig } from "../config";
 import { selectDevice } from "./select";
-import { listDevices, getDeviceOptions } from "./sane";
+import { getDeviceOptions } from "./sane";
 
 export type StartScanInput = {
   device_id?: string;
@@ -241,7 +241,12 @@ export async function resolveEffectiveInput(input: StartScanInput, config?: AppC
     try {
       const opts = await getDeviceOptions(out.device_id);
       if (!out.source && opts.sources && opts.sources.length) {
-        out.source = (opts.sources.includes("ADF Duplex") ? "ADF Duplex" : opts.sources.includes("ADF") ? "ADF" : opts.sources[0]) as any;
+        const selected = opts.sources.includes("ADF Duplex")
+          ? "ADF Duplex"
+          : opts.sources.includes("ADF")
+            ? "ADF"
+            : opts.sources[0];
+        out.source = selected as StartScanInput["source"];
       }
       // If duplex requested, prefer ADF Duplex when available
       if (out.duplex && opts.sources && opts.sources.includes("ADF Duplex")) {
@@ -251,7 +256,8 @@ export async function resolveEffectiveInput(input: StartScanInput, config?: AppC
         out.resolution_dpi = opts.resolutions.includes(300) ? 300 : opts.resolutions[opts.resolutions.length - 1];
       }
       if (!out.color_mode && opts.color_modes && opts.color_modes.length) {
-        out.color_mode = (opts.color_modes.includes("Color") ? "Color" : opts.color_modes[0]) as any;
+        const selectedMode = opts.color_modes.includes("Color") ? "Color" : opts.color_modes[0];
+        out.color_mode = selectedMode as StartScanInput["color_mode"];
       }
     } catch {
       // ignore
