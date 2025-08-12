@@ -19,6 +19,13 @@ describe("scan command planning", () => {
     expect(cmds).toHaveLength(1);
     expect(cmds[0].bin).toContain("scanimage");
   });
+
+  it("adds -x/-y for standard page sizes", () => {
+    const letter = planScanCommands({ device_id: "dev", page_size: "Letter" }, runDir, config)[0].args.join(" ");
+    expect(letter).toMatch(/-x 215\.9mm -y 279\.4mm/);
+    const a4 = planScanCommands({ device_id: "dev", page_size: "A4" }, runDir, config)[0].args.join(" ");
+    expect(a4).toMatch(/-x 210mm -y 297mm/);
+  });
 });
 
 describe("page segmentation", () => {
@@ -32,4 +39,3 @@ describe("page segmentation", () => {
     expect(segs).toEqual([[1, 2, 3]]);
   });
 });
-

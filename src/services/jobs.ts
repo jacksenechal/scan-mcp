@@ -81,6 +81,8 @@ export async function startScanJob(input: StartScanInput): Promise<StartScanResu
 
     manifest.state = "completed";
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    // Persist last-used device id for intelligent selection tie-breaker
+    if (manifest.device_id) saveLastUsedDevice(manifest.device_id, config);
     return { job_id: id, run_dir: runDir, state: manifest.state };
   }
 
@@ -129,6 +131,7 @@ export async function startScanJob(input: StartScanInput): Promise<StartScanResu
   manifest.state = "completed";
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_completed" });
+  if (manifest.device_id) saveLastUsedDevice(manifest.device_id, config);
 
   return { job_id: id, run_dir: runDir, state: manifest.state };
 }
@@ -189,6 +192,11 @@ function buildCommonArgs(input: StartScanInput, batchPattern: string): string[] 
   if (input.resolution_dpi) args.push("--resolution", String(input.resolution_dpi));
   if (input.color_mode) args.push("--mode", input.color_mode);
   if (input.source) args.push("--source", input.source);
+  // Page size mapping via -x/-y in mm when provided
+  const size = pageSizeMm(input);
+  if (size) {
+    args.push("-x", `${size.width}mm`, "-y", `${size.height}mm`);
+  }
   // Always batch pages; both scanimage and scanadf forward these
   args.push(`--batch=${batchPattern}`);
   args.push("--format=tiff");
@@ -225,7 +233,7 @@ export async function resolveEffectiveInput(input: StartScanInput, config?: AppC
   const out: StartScanInput = { ...input };
 
   if (!out.device_id) {
-    const sel = await selectDevice({ desiredSource: out.source, desiredResolutionDpi: out.resolution_dpi }, cfg);
+    const sel = await selectDevice({ desiredSource: out.source, desiredResolutionDpi: out.resolution_dpi }, cfg, loadLastUsedDevice(cfg) || undefined);
     if (sel) out.device_id = sel.deviceId;
   }
 
@@ -234,6 +242,10 @@ export async function resolveEffectiveInput(input: StartScanInput, config?: AppC
       const opts = await getDeviceOptions(out.device_id);
       if (!out.source && opts.sources && opts.sources.length) {
         out.source = (opts.sources.includes("ADF Duplex") ? "ADF Duplex" : opts.sources.includes("ADF") ? "ADF" : opts.sources[0]) as any;
+      }
+      // If duplex requested, prefer ADF Duplex when available
+      if (out.duplex && opts.sources && opts.sources.includes("ADF Duplex")) {
+        out.source = "ADF Duplex";
       }
       if (!out.resolution_dpi && opts.resolutions && opts.resolutions.length) {
         out.resolution_dpi = opts.resolutions.includes(300) ? 300 : opts.resolutions[opts.resolutions.length - 1];
@@ -250,4 +262,48 @@ export async function resolveEffectiveInput(input: StartScanInput, config?: AppC
   if (!out.resolution_dpi) out.resolution_dpi = 300;
 
   return out;
+}
+
+function pageSizeMm(input: StartScanInput): { width: number; height: number } | null {
+  if (input.page_size === "Custom" && input.custom_size_mm) {
+    return { width: input.custom_size_mm.width, height: input.custom_size_mm.height };
+  }
+  switch (input.page_size) {
+    case "Letter":
+      return { width: 215.9, height: 279.4 };
+    case "A4":
+      return { width: 210, height: 297 };
+    case "Legal":
+      return { width: 215.9, height: 355.6 };
+    default:
+      return null;
+  }
+}
+
+function stateDir(config: AppConfig) {
+  const base = path.resolve(config.INBOX_DIR, "..", ".state");
+  fs.mkdirSync(base, { recursive: true });
+  return base;
+}
+
+function lastUsedPath(config: AppConfig) {
+  return path.join(stateDir(config), "scan-mcp.json");
+}
+
+function saveLastUsedDevice(deviceId: string, config: AppConfig) {
+  const p = lastUsedPath(config);
+  try {
+    fs.writeFileSync(p, JSON.stringify({ device_id: deviceId }, null, 2));
+  } catch {}
+}
+
+function loadLastUsedDevice(config: AppConfig): string | null {
+  const p = lastUsedPath(config);
+  try {
+    const raw = fs.readFileSync(p, "utf8");
+    const j = JSON.parse(raw);
+    return typeof j.device_id === "string" ? j.device_id : null;
+  } catch {
+    return null;
+  }
 }
