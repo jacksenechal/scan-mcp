@@ -1,5 +1,5 @@
 import { execa } from "execa";
-import { loadConfig } from "../config";
+import { loadConfig } from "../config.js";
 
 export type Device = {
   id: string;

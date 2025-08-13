@@ -1,14 +1,17 @@
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 import pino from "pino";
-import Ajv, { ValidateFunction } from "ajv";
+import AjvModule from "ajv";
+import type { ValidateFunction } from "ajv";
 import { v4 as uuidv4 } from "uuid";
 
-import { loadConfig } from "./config";
-import { listDevices, getDeviceOptions } from "./services/sane";
-import { startScanJob, getJobStatus, cancelJob, type StartScanInput } from "./services/jobs";
+import { loadConfig } from "./config.js";
+import { listDevices, getDeviceOptions } from "./services/sane.js";
+import { startScanJob, getJobStatus, cancelJob, type StartScanInput } from "./services/jobs.js";
 const config = loadConfig();
 const logger = pino({ level: config.LOG_LEVEL });
+const Ajv = AjvModule as unknown as typeof import("ajv").default;
 
 type Tool = {
   name: string;
@@ -80,6 +83,8 @@ function makeStubImplementations(tools: Record<string, Tool>) {
 }
 
 export async function main() {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
   const projectRoot = path.resolve(__dirname, "..");
   const schemasDir = path.join(projectRoot, "schemas");
   if (!fs.existsSync(schemasDir)) {
@@ -142,7 +147,16 @@ export async function main() {
   process.exit(0);
 }
 
-if (require.main === module) {
+const isMain = (() => {
+  try {
+    const thisFile = fileURLToPath(import.meta.url);
+    return path.resolve(process.argv[1] || "") === thisFile;
+  } catch {
+    return false;
+  }
+})();
+
+if (isMain) {
   main().catch((err) => {
     logger.error({ err }, "unexpected error");
     process.exit(1);

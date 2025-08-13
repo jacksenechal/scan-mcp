@@ -1,5 +1,5 @@
-import { loadConfig, type AppConfig } from "../config";
-import { listDevices, getDeviceOptions, type DeviceOptions } from "./sane";
+import { loadConfig, type AppConfig } from "../config.js";
+import { listDevices, getDeviceOptions, type DeviceOptions } from "./sane.js";
 
 export type SelectionInput = {
   desiredSource?: "Flatbed" | "ADF" | "ADF Duplex";

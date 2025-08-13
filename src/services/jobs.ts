@@ -3,9 +3,9 @@ import path from "path";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { execa } from "execa";
-import { loadConfig, type AppConfig } from "../config";
-import { selectDevice } from "./select";
-import { getDeviceOptions } from "./sane";
+import { loadConfig, type AppConfig } from "../config.js";
+import { selectDevice } from "./select.js";
+import { getDeviceOptions } from "./sane.js";
 
 export type StartScanInput = {
   device_id?: string;
