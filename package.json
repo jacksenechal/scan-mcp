@@ -8,9 +8,11 @@
   "types": "dist/server.d.ts",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:mcp": "tsx watch src/mcp.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/server.js",
+    "start:mcp": "node dist/mcp.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest"
