@@ -1,6 +1,8 @@
 import { fileURLToPath } from "url";
 import path from "path";
 import pino from "pino";
+import { Server } from "@modelcontextprotocol/sdk";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/node";
 import { loadConfig } from "./config.js";
 import { listDevices, getDeviceOptions } from "./services/sane.js";
 import { startScanJob, getJobStatus, cancelJob, type StartScanInput } from "./services/jobs.js";
@@ -8,43 +10,7 @@ import { startScanJob, getJobStatus, cancelJob, type StartScanInput } from "./se
 const config = loadConfig();
 const logger = pino({ level: config.LOG_LEVEL });
 
-type SdkServerCtor = new (
-  info: { name: string; version: string },
-  opts: { capabilities: { tools: object; resources: object } }
-) => {
-  tool: (
-    name: string,
-    def: {
-      description?: string;
-      inputSchema?: object;
-      outputSchema?: object;
-      handler: (input: unknown) => Promise<unknown>;
-    }
-  ) => void;
-  connect: (transport: unknown) => Promise<void>;
-};
-type SdkTransportCtor = new (...args: unknown[]) => unknown;
-
-// Lazy import the MCP SDK to avoid build-time dependency until installed.
-async function loadSdk(): Promise<{ Server: SdkServerCtor; StdioServerTransport: SdkTransportCtor }> {
-  try {
-    const sdkMod = await import("@modelcontextprotocol/sdk");
-    const nodeMod = await import("@modelcontextprotocol/sdk/node");
-    const Server = (sdkMod as unknown as { Server?: SdkServerCtor; default?: { Server?: SdkServerCtor } }).Server ??
-      (sdkMod as unknown as { default?: { Server?: SdkServerCtor } }).default?.Server as SdkServerCtor;
-    const StdioServerTransport = (
-      nodeMod as unknown as { StdioServerTransport?: SdkTransportCtor; default?: { StdioServerTransport?: SdkTransportCtor } }
-    ).StdioServerTransport ??
-      (nodeMod as unknown as { default?: { StdioServerTransport?: SdkTransportCtor } }).default?.StdioServerTransport as SdkTransportCtor;
-    return { Server, StdioServerTransport };
-  } catch (err) {
-    logger.error({ err }, "Failed to load MCP SDK. Install @modelcontextprotocol/sdk to enable stdio transport.");
-    throw err;
-  }
-}
-
 export async function main() {
-  const { Server, StdioServerTransport } = await loadSdk();
   const server = new Server(
     { name: "scan-mcp", version: "0.1.0" },
     {
