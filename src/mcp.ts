@@ -8,15 +8,34 @@ import { startScanJob, getJobStatus, cancelJob, type StartScanInput } from "./se
 const config = loadConfig();
 const logger = pino({ level: config.LOG_LEVEL });
 
+type SdkServerCtor = new (
+  info: { name: string; version: string },
+  opts: { capabilities: { tools: object; resources: object } }
+) => {
+  tool: (
+    name: string,
+    def: {
+      description?: string;
+      inputSchema?: object;
+      outputSchema?: object;
+      handler: (input: unknown) => Promise<unknown>;
+    }
+  ) => void;
+  connect: (transport: unknown) => Promise<void>;
+};
+type SdkTransportCtor = new (...args: unknown[]) => unknown;
+
 // Lazy import the MCP SDK to avoid build-time dependency until installed.
-async function loadSdk(): Promise<{ Server: any; StdioServerTransport: any }> {
+async function loadSdk(): Promise<{ Server: SdkServerCtor; StdioServerTransport: SdkTransportCtor }> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const sdk = (await (Function('return import("@modelcontextprotocol/sdk")')())) as any;
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const nodeSdk = (await (Function('return import("@modelcontextprotocol/sdk/node")')())) as any;
-    const Server = sdk.Server ?? sdk.default?.Server ?? sdk;
-    const StdioServerTransport = nodeSdk.StdioServerTransport ?? nodeSdk.default?.StdioServerTransport ?? nodeSdk;
+    const sdkMod = await import("@modelcontextprotocol/sdk");
+    const nodeMod = await import("@modelcontextprotocol/sdk/node");
+    const Server = (sdkMod as unknown as { Server?: SdkServerCtor; default?: { Server?: SdkServerCtor } }).Server ??
+      (sdkMod as unknown as { default?: { Server?: SdkServerCtor } }).default?.Server as SdkServerCtor;
+    const StdioServerTransport = (
+      nodeMod as unknown as { StdioServerTransport?: SdkTransportCtor; default?: { StdioServerTransport?: SdkTransportCtor } }
+    ).StdioServerTransport ??
+      (nodeMod as unknown as { default?: { StdioServerTransport?: SdkTransportCtor } }).default?.StdioServerTransport as SdkTransportCtor;
     return { Server, StdioServerTransport };
   } catch (err) {
     logger.error({ err }, "Failed to load MCP SDK. Install @modelcontextprotocol/sdk to enable stdio transport.");
@@ -44,6 +63,8 @@ export async function main() {
     handler: async () => listDevices(),
   });
 
+  const asRecord = (input: unknown): Record<string, unknown> => (input ?? {}) as Record<string, unknown>;
+
   server.tool("/scan/get_device_options", {
     description: "Get options for a device via scanimage -A",
     inputSchema: {
@@ -52,13 +73,16 @@ export async function main() {
       properties: { device_id: { type: "string" } },
       required: ["device_id"],
     },
-    handler: async (input: { device_id: string }) => getDeviceOptions(String(input.device_id)),
+    handler: async (input: unknown) => {
+      const rec = asRecord(input);
+      return getDeviceOptions(String(rec.device_id ?? ""));
+    },
   });
 
   server.tool("/scan/start_scan_job", {
     description: "Start a scanning job (ADF/duplex/page-size aware)",
     inputSchema: { type: "object" },
-    handler: async (input: StartScanInput) => startScanJob(input),
+    handler: async (input: unknown) => startScanJob(input as StartScanInput),
   });
 
   server.tool("/scan/get_job_status", {
@@ -69,7 +93,10 @@ export async function main() {
       properties: { job_id: { type: "string" } },
       required: ["job_id"],
     },
-    handler: async (input: { job_id: string }) => getJobStatus(String(input.job_id)),
+    handler: async (input: unknown) => {
+      const rec = asRecord(input);
+      return getJobStatus(String(rec.job_id ?? ""));
+    },
   });
 
   server.tool("/scan/cancel_job", {
@@ -80,7 +107,10 @@ export async function main() {
       properties: { job_id: { type: "string" } },
       required: ["job_id"],
     },
-    handler: async (input: { job_id: string }) => cancelJob(String(input.job_id)),
+    handler: async (input: unknown) => {
+      const rec = asRecord(input);
+      return cancelJob(String(rec.job_id ?? ""));
+    },
   });
 
   // Resources can be added later using server.resource(...) once SDK is present.
@@ -105,4 +135,3 @@ if (isMain) {
     process.exit(1);
   });
 }
-
