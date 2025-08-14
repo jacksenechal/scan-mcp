@@ -4,7 +4,7 @@ SHELL := /usr/bin/bash
 # Local dev Makefile for scan-mcp only
 NVM_DIR ?= $(HOME)/.nvm
 NVM_SH  ?= /usr/share/nvm/nvm.sh
-NODE_VERSION ?= 20
+NODE_VERSION ?= 22
 
 define NVM_ACTIVATE
   export NVM_DIR="$(NVM_DIR)";
