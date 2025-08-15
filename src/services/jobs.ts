@@ -163,6 +163,55 @@ export async function cancelJob(jobId: string, baseDir?: string) {
   return { ok: true } as const;
 }
 
+export type JobInfo = {
+  job_id: string;
+  run_dir: string;
+  state: string;
+  created_at?: string;
+  pages?: number;
+  documents?: number;
+};
+
+export async function listJobs({ limit, state }: { limit?: number; state?: string } = {}): Promise<JobInfo[]> {
+  const config = loadConfig();
+  const base = path.resolve(config.INBOX_DIR);
+  if (!fs.existsSync(base)) return [];
+  const entries = fs
+    .readdirSync(base, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && d.name.startsWith("job-"))
+    .map((d) => ({ name: d.name, run_dir: path.join(base, d.name) }));
+
+  const items: JobInfo[] = [];
+  for (const e of entries) {
+    const manifestPath = path.join(e.run_dir, "manifest.json");
+    if (fs.existsSync(manifestPath)) {
+      try {
+        const m = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        items.push({
+          job_id: m.job_id || e.name,
+          run_dir: e.run_dir,
+          state: String(m.state || "unknown"),
+          created_at: typeof m.created_at === "string" ? m.created_at : undefined,
+          pages: Array.isArray(m.pages) ? m.pages.length : undefined,
+          documents: Array.isArray(m.documents) ? m.documents.length : undefined,
+        });
+        continue;
+      } catch {}
+    }
+    const st = fs.statSync(e.run_dir);
+    items.push({ job_id: e.name, run_dir: e.run_dir, state: "unknown", created_at: new Date(st.mtimeMs).toISOString() });
+  }
+
+  items.sort((a, b) => {
+    const at = a.created_at ? Date.parse(a.created_at) : 0;
+    const bt = b.created_at ? Date.parse(b.created_at) : 0;
+    return bt - at;
+  });
+
+  const filtered = state ? items.filter((j) => j.state === state) : items;
+  return typeof limit === "number" && limit > 0 ? filtered.slice(0, limit) : filtered;
+}
+
 function hashFile(p: string): string {
   const h = crypto.createHash("sha256");
   h.update(fs.readFileSync(p));
