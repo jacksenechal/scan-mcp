@@ -7,10 +7,10 @@ describe("scan command planning", () => {
   const config = loadConfig();
   const runDir = path.resolve("/tmp/dummy-run");
 
-  it("prefers scanadf for ADF sources with fallback to scanimage", () => {
+  it("uses scanimage for ADF sources", () => {
     const cmds = planScanCommands({ source: "ADF Duplex", device_id: "dev" }, runDir, config);
-    expect(cmds[0].bin).toContain("scanadf");
-    expect(cmds[1].bin).toContain("scanimage");
+    expect(cmds).toHaveLength(1);
+    expect(cmds[0].bin).toContain("scanimage");
     expect(cmds[0].args.join(" ")).toContain("--batch=");
   });
 

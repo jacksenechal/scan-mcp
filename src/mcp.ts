@@ -1,6 +1,7 @@
 import { fileURLToPath } from "url";
 import path from "path";
 import pino from "pino";
+import fs from "fs";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -17,23 +18,6 @@ export async function main() {
     { capabilities: { tools: {}, resources: {} } }
   );
 
-  // Common shapes
-  const DeviceShape = {
-    id: z.string(),
-    vendor: z.string().optional(),
-    model: z.string().optional(),
-    saneName: z.string().optional(),
-    capabilities: z
-      .object({
-        adf: z.boolean().optional(),
-        duplex: z.boolean().optional(),
-        color_modes: z.array(z.string()).optional(),
-        resolutions: z.array(z.number()).optional(),
-        page_sizes: z.array(z.string()).optional(),
-      })
-      .optional(),
-  } as const;
-
   // Tools with input schemas and JSON text outputs
   server.tool(
     "/scan/list_devices",
@@ -47,7 +31,7 @@ export async function main() {
     "/scan/get_device_options",
     "Get SANE options for a specific device (sources, resolutions, modes)",
     GetDeviceOptionsShape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions((args as any).device_id)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions((args as { device_id: string }).device_id)) }] })
   );
 
   const StartScanInputShape = {
@@ -83,24 +67,23 @@ export async function main() {
     "/scan/get_job_status",
     "Get status and artifact counts for a job",
     JobIdShape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getJobStatus((args as any).job_id)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getJobStatus((args as { job_id: string }).job_id)) }] })
   );
 
   server.tool(
     "/scan/cancel_job",
     "Cancel a running scan job",
     JobIdShape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob((args as any).job_id)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob((args as { job_id: string }).job_id)) }] })
   );
 
   // List jobs tool
   const ListJobsInput = { limit: z.number().int().positive().max(100).optional(), state: z.enum(["running", "completed", "cancelled", "error", "unknown"]).optional() } as const;
-  const JobItemShape = { job_id: z.string(), run_dir: z.string(), state: z.string(), created_at: z.string().optional(), pages: z.number().optional(), documents: z.number().optional() } as const;
   server.tool(
     "/scan/list_jobs",
     "List recent scan jobs from the inbox directory",
     ListJobsInput,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(args as any) }) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(args as { limit?: number; state?: "running" | "completed" | "cancelled" | "error" | "unknown" }) }) }] })
   );
 
   // Resources: manifest and events per-job
@@ -109,11 +92,15 @@ export async function main() {
     "/scan/resources/manifest",
     manifestTemplate,
     async (_uri, variables) => {
-      const jobId = String((variables as any).job_id || "");
+      const jobId = String((variables as { job_id: string }).job_id || "");
       const runDir = path.join(path.resolve(config.INBOX_DIR), jobId);
       const p = path.join(runDir, "manifest.json");
       const txt = fsSafeRead(p);
-      return { content: [{ type: "text", text: txt ?? "manifest not found" }], isError: !txt } as any;
+      if (txt) {
+        return { contents: [{ uri: `file://${p}`, text: txt }] };
+      } else {
+        return { contents: [], isError: true };
+      }
     }
   );
 
@@ -122,17 +109,21 @@ export async function main() {
     "/scan/resources/events",
     eventsTemplate,
     async (_uri, variables) => {
-      const jobId = String((variables as any).job_id || "");
+      const jobId = String((variables as { job_id: string }).job_id || "");
       const runDir = path.join(path.resolve(config.INBOX_DIR), jobId);
       const p = path.join(runDir, "events.jsonl");
       const txt = fsSafeRead(p);
-      return { content: [{ type: "text", text: txt ?? "events not found" }], isError: !txt } as any;
+      if (txt) {
+        return { contents: [{ uri: `file://${p}`, text: txt }] };
+      } else {
+        return { contents: [], isError: true };
+      }
     }
   );
 
   function fsSafeRead(p: string): string | null {
     try {
-      return require("fs").readFileSync(p, "utf8");
+      return fs.readFileSync(p, "utf8");
     } catch {
       return null;
     }
