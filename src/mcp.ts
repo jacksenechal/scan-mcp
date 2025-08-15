@@ -7,7 +7,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { loadConfig } from "./config.js";
 import { listDevices, getDeviceOptions } from "./services/sane.js";
-import { startScanJob, getJobStatus, cancelJob, listJobs, type StartScanInput } from "./services/jobs.js";
+import { startScanJob, getJobStatus, cancelJob, listJobs } from "./services/jobs.js";
 
 const config = loadConfig();
 const logger = pino({ level: config.LOG_LEVEL });
@@ -26,15 +26,15 @@ export async function main() {
     async () => ({ content: [{ type: "text", text: JSON.stringify({ devices: await listDevices() }) }] })
   );
 
-  const GetDeviceOptionsShape = { device_id: z.string() } as const;
+  const GetDeviceOptionsShape = z.object({ device_id: z.string() });
   server.tool(
     "/scan/get_device_options",
     "Get SANE options for a specific device (sources, resolutions, modes)",
-    GetDeviceOptionsShape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions((args as { device_id: string }).device_id)) }] })
+    GetDeviceOptionsShape.shape,
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions(GetDeviceOptionsShape.parse(args).device_id)) }] })
   );
 
-  const StartScanInputShape = {
+  const StartScanInputShape = z.object({
     device_id: z.string().optional(),
     resolution_dpi: z.number().int().optional(),
     color_mode: z.enum(["Color", "Gray", "Lineart"]).optional(),
@@ -53,37 +53,37 @@ export async function main() {
       .optional(),
     output_format: z.string().optional(),
     tmp_dir: z.string().optional(),
-  } as const;
+  });
 
   server.tool(
     "/scan/start_scan_job",
     "Start a scan job; auto-selects device and fills defaults when omitted",
-    StartScanInputShape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await startScanJob(args as unknown as StartScanInput)) }] })
+    StartScanInputShape.shape,
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await startScanJob(StartScanInputShape.parse(args))) }] })
   );
 
-  const JobIdShape = { job_id: z.string() } as const;
+  const JobIdShape = z.object({ job_id: z.string() });
   server.tool(
     "/scan/get_job_status",
     "Get status and artifact counts for a job",
-    JobIdShape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getJobStatus((args as { job_id: string }).job_id)) }] })
+    JobIdShape.shape,
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getJobStatus(JobIdShape.parse(args).job_id)) }] })
   );
 
   server.tool(
     "/scan/cancel_job",
     "Cancel a running scan job",
-    JobIdShape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob((args as { job_id: string }).job_id)) }] })
+    JobIdShape.shape,
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob(JobIdShape.parse(args).job_id)) }] })
   );
 
   // List jobs tool
-  const ListJobsInput = { limit: z.number().int().positive().max(100).optional(), state: z.enum(["running", "completed", "cancelled", "error", "unknown"]).optional() } as const;
+  const ListJobsInput = z.object({ limit: z.number().int().positive().max(100).optional(), state: z.enum(["running", "completed", "cancelled", "error", "unknown"]).optional() });
   server.tool(
     "/scan/list_jobs",
     "List recent scan jobs from the inbox directory",
-    ListJobsInput,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(args as { limit?: number; state?: "running" | "completed" | "cancelled" | "error" | "unknown" }) }) }] })
+    ListJobsInput.shape,
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(ListJobsInput.parse(args)) }) }] })
   );
 
   // Resources: manifest and events per-job
@@ -92,7 +92,7 @@ export async function main() {
     "/scan/resources/manifest",
     manifestTemplate,
     async (_uri, variables) => {
-      const jobId = String((variables as { job_id: string }).job_id || "");
+      const jobId = z.string().parse(variables.job_id);
       const runDir = path.join(path.resolve(config.INBOX_DIR), jobId);
       const p = path.join(runDir, "manifest.json");
       const txt = fsSafeRead(p);
@@ -109,7 +109,7 @@ export async function main() {
     "/scan/resources/events",
     eventsTemplate,
     async (_uri, variables) => {
-      const jobId = String((variables as { job_id: string }).job_id || "");
+      const jobId = z.string().parse(variables.job_id);
       const runDir = path.join(path.resolve(config.INBOX_DIR), jobId);
       const p = path.join(runDir, "events.jsonl");
       const txt = fsSafeRead(p);
