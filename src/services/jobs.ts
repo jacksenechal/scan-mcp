@@ -80,16 +80,18 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
 
   // Real execution path
   const candidates = planScanCommands(manifest.params, runDir, config);
+  let ran = false; // Initialize ran to false
   for (const c of candidates) {
     try {
       await execa(c.bin, c.args, { cwd: runDir, shell: false, stdio: "inherit" });
-      return true;
+      ran = true;
+      break;
     } catch (err) {
       appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_primary_failed", data: { bin: c.bin, args: c.args, err: String(err) } });
       continue;
     }
   }
-  return false;
+  return ran; // Return ran
 }
 
 async function processPages(runDir: string, manifest: Manifest, config: AppConfig) {

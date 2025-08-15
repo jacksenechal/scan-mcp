@@ -1,20 +1,32 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
 import fs from "fs";
 import path from "path";
 import { startScanJob, getJobStatus, cancelJob, listJobs } from "../src/services/jobs";
 import { loadConfig } from "../src/config";
 
+const tmpInboxDir = path.resolve(__dirname, ".tmp-inbox-jobs-api");
+
 describe("jobs api", () => {
   const config = loadConfig();
-  config.SCAN_MOCK = true; // Set SCAN_MOCK to true
+
+  beforeAll(() => {
+    process.env.SCAN_MOCK = "1"; // Set SCAN_MOCK to true
+    process.env.INBOX_DIR = tmpInboxDir; // Set INBOX_DIR to a temporary path
+    fs.mkdirSync(tmpInboxDir, { recursive: true });
+  });
+
+  afterAll(() => {
+    try {
+      fs.rmSync(tmpInboxDir, { recursive: true, force: true });
+    } catch {}
+  });
 
   beforeEach(() => {
     // Clear the inbox directory before each test
-    const inboxDir = path.resolve(config.INBOX_DIR);
-    if (fs.existsSync(inboxDir)) {
-      fs.rmSync(inboxDir, { recursive: true, force: true });
+    if (fs.existsSync(tmpInboxDir)) {
+      fs.rmSync(tmpInboxDir, { recursive: true, force: true });
     }
-    fs.mkdirSync(inboxDir, { recursive: true });
+    fs.mkdirSync(tmpInboxDir, { recursive: true });
   });
 
   it("should get job status", async () => {

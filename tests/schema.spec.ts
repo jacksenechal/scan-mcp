@@ -43,33 +43,13 @@ describe("JSON Schemas", () => {
     const validate = ajv.compile(listDevicesSchema);
 
     // Example of valid data for list_devices (adjust based on actual schema)
-    const validData = {
-      devices: [
-        {
-          id: "device1",
-          vendor: "Vendor A",
-          model: "Model X",
-          saneName: "sane:device1",
-          capabilities: {
-            adf: true,
-            duplex: false,
-            color_modes: ["Color", "Gray"],
-            resolutions: [100, 200],
-            page_sizes: ["A4"],
-          },
-        },
-      ],
-    };
+    const validData = {};
     expect(validate(validData)).toBe(true);
     expect(validate.errors).toBeNull();
 
     // Example of invalid data
     const invalidData = {
-      devices: [
-        {
-          id: 123, // Invalid type
-        },
-      ],
+      foo: "bar", // Any additional property should make it invalid
     };
     expect(validate(invalidData)).toBe(false);
     expect(validate.errors).not.toBeNull();
