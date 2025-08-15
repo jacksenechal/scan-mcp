@@ -25,7 +25,7 @@ Environment
  - `SCAN_PREFER_BACKENDS` (CSV): lightly prefer these backends when ranking (e.g., `epjitsu,epson2`).
 
 Device selection and real hardware smoke
-1) Ensure system deps are installed (`scanimage`/`scanadf`).
+1) Ensure system deps are installed (`scanimage`).
 2) By default, when you call `start_scan_job` without a `device_id`, the server will:
    - List devices, probe options, then rank devices by feeder capability (prefers `ADF Duplex` → `ADF`), duplex, resolution match (300dpi), and avoid camera backends like `v4l`.
    - Fill missing `source`/`resolution_dpi`/`color_mode` from device options (prefers `ADF Duplex`, 300dpi, `Color`).

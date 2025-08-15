@@ -225,13 +225,6 @@ function appendEvent(eventsPath: string, evt: Record<string, unknown>) {
 export function planScanCommands(input: StartScanInput, runDir: string, config: AppConfig): { bin: string; args: string[] }[] {
   const batchPattern = path.join(runDir, "page_%04d.tiff");
   const baseArgs = buildCommonArgs(input, batchPattern);
-  const wantsAdf = !!(input.source && /ADF/i.test(input.source));
-  if (wantsAdf) {
-    return [
-      { bin: config.SCANADF_BIN, args: baseArgs },
-      { bin: config.SCANIMAGE_BIN, args: baseArgs },
-    ];
-  }
   return [{ bin: config.SCANIMAGE_BIN, args: baseArgs }];
 }
 
