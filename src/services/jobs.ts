@@ -32,108 +32,114 @@ export type StartScanResult = {
   state: "running" | "completed" | "cancelled" | "error";
 };
 
-export async function startScanJob(input: StartScanInput): Promise<StartScanResult> {
-  const config = loadConfig();
+type Manifest = {
+  job_id: string;
+  device_id: string | null;
+  created_at: string;
+  params: StartScanInput;
+  pages: { index: number; path: string; sha256: string }[];
+  documents: { index: number; pages: number[]; path: string; sha256: string }[];
+  state: "running" | "completed" | "cancelled" | "error";
+};
+
+async function initializeJob(input: StartScanInput, config: AppConfig): Promise<{ runDir: string, manifest: Manifest, eventsPath: string }> {
   const effective = await resolveEffectiveInput(input, config);
   const id = `job-${uuidv4()}`;
   const baseDir = effective.tmp_dir ? path.resolve(effective.tmp_dir) : path.resolve(config.INBOX_DIR);
   const runDir = path.join(baseDir, id);
   fs.mkdirSync(runDir, { recursive: true });
 
-  const manifestPath = path.join(runDir, "manifest.json");
   const eventsPath = path.join(runDir, "events.jsonl");
   const now = new Date().toISOString();
 
-  const manifest: {
-    job_id: string;
-    device_id: string | null;
-    created_at: string;
-    params: StartScanInput;
-    pages: { index: number; path: string; sha256: string }[];
-    documents: { index: number; pages: number[]; path: string; sha256: string }[];
-    state: "running" | "completed" | "cancelled" | "error";
-  } = {
+  const manifest: Manifest = {
     job_id: id,
     device_id: effective.device_id ?? null,
     created_at: now,
     params: effective,
-    pages: [] as { index: number; path: string; sha256: string }[],
-    documents: [] as { index: number; pages: number[]; path: string; sha256: string }[],
+    pages: [],
+    documents: [],
     state: "running" as const,
   };
 
   appendEvent(eventsPath, { ts: now, type: "job_started", data: { input: effective } });
 
+  return { runDir, manifest, eventsPath };
+}
+
+async function runScan(runDir: string, manifest: Manifest, eventsPath: string, config: AppConfig): Promise<boolean> {
   if (config.SCAN_MOCK) {
     // Create a couple of fake TIFFs to simulate capture
     const pageCount = 2;
     for (let i = 1; i <= pageCount; i++) {
       const p = path.join(runDir, `page_${String(i).padStart(4, "0")}.tiff`);
       fs.writeFileSync(p, `MOCK_TIFF_PAGE_${i}`);
-      const sha256 = hashFile(p);
-      manifest.pages.push({ index: i, path: p, sha256 });
-      appendEvent(eventsPath, { ts: new Date().toISOString(), type: "page_captured", data: { index: i, path: p } });
     }
-    // One document with both pages (simulate assembly)
-    const docPath = path.join(runDir, `doc_0001.tiff`);
-    fs.writeFileSync(docPath, `MOCK_TIFF_DOC_1`);
-    manifest.documents.push({ index: 1, pages: [1, 2], path: docPath, sha256: hashFile(docPath) });
-
-    manifest.state = "completed";
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-    // Persist last-used device id for intelligent selection tie-breaker
-    if (manifest.device_id) saveLastUsedDevice(manifest.device_id, config);
-    return { job_id: id, run_dir: runDir, state: manifest.state };
+    return true;
   }
 
-  // Real execution path (not used during tests unless SCAN_MOCK=0)
-  const candidates = planScanCommands(effective, runDir, config);
-  let ran = false;
+  // Real execution path
+  const candidates = planScanCommands(manifest.params, runDir, config);
   for (const c of candidates) {
     try {
       await execa(c.bin, c.args, { cwd: runDir, shell: false, stdio: "inherit" });
-      ran = true;
-      break;
+      return true;
     } catch (err) {
       appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_primary_failed", data: { bin: c.bin, args: c.args, err: String(err) } });
       continue;
     }
   }
-  if (!ran) {
-    manifest.state = "error";
+  return false;
+}
+
+async function processPages(runDir: string, manifest: Manifest, config: AppConfig) {
+    const pages = fs
+        .readdirSync(runDir)
+        .filter((f) => f.startsWith("page_") && f.endsWith(".tiff"))
+        .sort()
+        .map((f, idx) => {
+            const p = path.join(runDir, f);
+            return { index: idx + 1, path: p, sha256: hashFile(p) };
+        });
+    manifest.pages.push(...pages);
+
+    const segments = segmentPages(pages.map((p) => p.index), manifest.params.doc_break_policy);
+    let docIdx = 1;
+    for (const seg of segments) {
+        const outDoc = path.join(runDir, `doc_${String(docIdx).padStart(4, "0")}.tiff`);
+        const segFiles = seg.map((i) => pages[i - 1]?.path).filter(Boolean) as string[];
+        await assembleTiff(segFiles, outDoc, config);
+        manifest.documents.push({ index: docIdx, pages: seg, path: outDoc, sha256: hashFile(outDoc) });
+        docIdx++;
+    }
+}
+
+function updateManifest(runDir: string, manifest: Manifest) {
+    const manifestPath = path.join(runDir, "manifest.json");
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+}
+
+export async function startScanJob(input: StartScanInput): Promise<StartScanResult> {
+  const config = loadConfig();
+  const { runDir, manifest, eventsPath } = await initializeJob(input, config);
+
+  const scanSuccessful = await runScan(runDir, manifest, eventsPath, config);
+
+  if (!scanSuccessful) {
+    manifest.state = "error";
+    updateManifest(runDir, manifest);
     appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_error", data: { reason: "all candidates failed" } });
-    return { job_id: id, run_dir: runDir, state: manifest.state };
+    return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
   }
 
-  // Collect pages and assemble simple manifest
-  const pages = fs
-    .readdirSync(runDir)
-    .filter((f) => f.startsWith("page_") && f.endsWith(".tiff"))
-    .sort()
-    .map((f, idx) => {
-      const p = path.join(runDir, f);
-      return { index: idx + 1, path: p, sha256: hashFile(p) };
-    });
-  manifest.pages.push(...pages);
-
-  // Segment into documents per doc_break_policy (page_count only for now)
-  const segments = segmentPages(pages.map((p) => p.index), effective.doc_break_policy);
-  let docIdx = 1;
-  for (const seg of segments) {
-    const outDoc = path.join(runDir, `doc_${String(docIdx).padStart(4, "0")}.tiff`);
-    const segFiles = seg.map((i) => pages[i - 1]?.path).filter(Boolean) as string[];
-    await assembleTiff(segFiles, outDoc, config);
-    manifest.documents.push({ index: docIdx, pages: seg, path: outDoc, sha256: hashFile(outDoc) });
-    docIdx++;
-  }
+  await processPages(runDir, manifest, config);
 
   manifest.state = "completed";
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  updateManifest(runDir, manifest);
   appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_completed" });
   if (manifest.device_id) saveLastUsedDevice(manifest.device_id, config);
 
-  return { job_id: id, run_dir: runDir, state: manifest.state };
+  return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
 }
 
 export async function getJobStatus(jobId: string, baseDir?: string) {

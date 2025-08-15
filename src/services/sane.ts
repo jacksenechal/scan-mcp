@@ -1,5 +1,8 @@
 import { execa } from "execa";
 import { loadConfig } from "../config.js";
+import pino from "pino";
+
+const logger = pino();
 
 export type Device = {
   id: string;
@@ -29,8 +32,13 @@ export async function listDevices(): Promise<Device[]> {
     ];
   }
 
-  const { stdout } = await execa(config.SCANIMAGE_BIN, ["-L"], { shell: false });
-  return parseScanimageList(stdout);
+  try {
+    const { stdout } = await execa(config.SCANIMAGE_BIN, ["-L"], { shell: false });
+    return parseScanimageList(stdout);
+  } catch (err) {
+    logger.error(err, "Failed to list devices");
+    return [];
+  }
 }
 
 export function parseScanimageList(text: string): Device[] {
@@ -38,7 +46,7 @@ export function parseScanimageList(text: string): Device[] {
   const result: Device[] = [];
   for (const line of lines) {
     // Example: device `epjitsu:libusb:001:004' is a FUJITSU ScanSnap S1500 scanner
-    const m = line.match(/^device `(.+?)' is a (.+)$/);
+    const m = line.match(/^device `(.+?)\' is a (.+)$/);
     if (!m) continue;
     const id = m[1];
     const desc = m[2];
@@ -70,8 +78,14 @@ export async function getDeviceOptions(deviceId: string): Promise<DeviceOptions>
       duplex: true,
     };
   }
-  const { stdout } = await execa(config.SCANIMAGE_BIN, ["-A", "-d", deviceId], { shell: false });
-  return parseScanimageOptions(stdout);
+
+  try {
+    const { stdout } = await execa(config.SCANIMAGE_BIN, ["-A", "-d", deviceId], { shell: false });
+    return parseScanimageOptions(stdout);
+  } catch (err) {
+    logger.error(err, "Failed to get device options");
+    return {};
+  }
 }
 
 export function parseScanimageOptions(text: string): DeviceOptions {
