@@ -1,10 +1,17 @@
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 import { startScanJob, getJobStatus, cancelJob, listJobs } from "../src/services/jobs";
 import { loadConfig } from "../src/config";
 
 const tmpInboxDir = path.resolve(__dirname, ".tmp-inbox-integration");
+
+// Mock execa globally for all tests in this file
+vi.mock('execa', () => ({
+  execa: vi.fn(() => Promise.resolve({
+    stdout: '', stderr: '', exitCode: 0, command: '', failed: false, timedOut: false, isCanceled: false, killed: false
+  })),
+}));
 
 describe("integration tests", () => {
   const config = loadConfig();

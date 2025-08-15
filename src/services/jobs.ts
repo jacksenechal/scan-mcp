@@ -270,6 +270,11 @@ export function segmentPages(pages: number[], policy?: StartScanInput["doc_break
 
 async function assembleTiff(inputFiles: string[], outPath: string, config: AppConfig) {
   if (inputFiles.length === 0) return;
+  if (config.SCAN_MOCK) {
+    // In mock mode, directly copy the first page to simulate assembly
+    fs.copyFileSync(inputFiles[0], outPath);
+    return;
+  }
   try {
     await execa(config.TIFFCP_BIN, [...inputFiles, outPath], { shell: false });
   } catch {
