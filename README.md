@@ -18,7 +18,7 @@ Quickstart (development)
    - node src/server.ts call /scan/list_devices '{}'
 
 Environment
-- `SCAN_MOCK` (default: `true`): when `true`, mock SANE calls and create fake pages/docs on `start_scan_job` for TDD. Set to `false` to use your real scanner.
+- `SCAN_MOCK` (default: `false`): when `true`, mock SANE calls and create fake pages/docs on `start_scan_job` for TDD. Leave as `false` to use your real scanner.
 - `INBOX_DIR` (default: `scanned_documents/inbox`): base directory for job run directories and artifacts.
 - `SCANIMAGE_BIN`/`SCANADF_BIN` (defaults: `scanimage`/`scanadf`): override paths to system binaries.
 - `TIFFCP_BIN`/`IM_CONVERT_BIN` (defaults: `tiffcp`/`convert`): assembly tools for multipage TIFFs.

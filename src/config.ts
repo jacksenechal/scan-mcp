@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 export const ConfigSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
   INBOX_DIR: z.string().default("scanned_documents/inbox"),
-  SCAN_MOCK: z.boolean().default(true),
+  SCAN_MOCK: z.boolean().default(false),
   SCANIMAGE_BIN: z.string().default("scanimage"),
   SCANADF_BIN: z.string().default("scanadf"),
   TIFFCP_BIN: z.string().default("tiffcp"),
