@@ -48,16 +48,11 @@ test:
 	$(NVM_ACTIVATE)
 	npm test -- --run
 
-.PHONY: list
-list: build
+## CLI-only targets removed; use mcptools to inspect the MCP server
+.PHONY: tools
+tools:
 	$(NVM_ACTIVATE)
-	node dist/server.js list
-
-.PHONY: call
-# Usage: make call TOOL="/scan/list_devices" PAYLOAD='{}'
-call: build
-	$(NVM_ACTIVATE)
-	node dist/server.js call $(TOOL) '$(PAYLOAD)'
+	mcp tools scan
 
 .PHONY: verify
 verify:
@@ -68,30 +63,8 @@ verify:
 	$(MAKE) test
 	$(MAKE) list
 
-.PHONY: real-list
-real-list: build
+.PHONY: real-scan
+# Example: make real-scan ARGS='{"resolution_dpi":300}'
+real-scan: build
 	$(NVM_ACTIVATE)
-	SCAN_MOCK=0 node dist/server.js call /scan/list_devices '{}'
-
-.PHONY: real-start
-# Example: make real-start DEVICE_ID="epjitsu:libusb:001:004" RES=300 SOURCE="ADF Duplex"
-real-start: build
-	$(NVM_ACTIVATE)
-	@if [ -z "$(DEVICE_ID)$(RES)$(SOURCE)" ]; then \
-  echo "No params provided; using server defaults (auto-detect)"; \
-  SCAN_MOCK=0 node dist/server.js call /scan/start_scan_job '{}' ; \
-else \
-  SCAN_MOCK=0 node dist/server.js call /scan/start_scan_job '{"device_id":"$(DEVICE_ID)"'"$$( [ -n "$(RES)" ] && printf ",\"resolution_dpi\":%s" "$(RES)" )"',"source":"$(SOURCE)"}'; \
-fi
-
-.PHONY: mock-start
-mock-start: build
-	$(NVM_ACTIVATE)
-	SCAN_MOCK=1 node dist/server.js call /scan/start_scan_job '{}'
-
-
-
-.PHONY: real-start-auto
-real-start-auto: build
-	$(NVM_ACTIVATE)
-	SCAN_MOCK=0 node dist/server.js call /scan/start_scan_job '{}'
+	mcp call /scan/start_scan_job --params '$(ARGS)' scan -f pretty

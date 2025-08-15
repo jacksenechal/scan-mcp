@@ -1,21 +1,20 @@
 # scan-mcp
 
-Minimal MCP server scaffold for scanner capture (ADF/duplex/page-size), batching, and multipage assembly.
+Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly. This package exposes an MCP server only (no standalone CLI).
 
 Purpose
 - Provide a small, typed MCP server that exposes tools for device discovery and starting scan jobs.
 - Validate incoming tool inputs with JSON Schema and return deterministic, typed outputs.
-- Include a minimal CLI surface for local smoke tests.
+  
 
 Quickstart (development)
 1. Install dev deps:
    - npm install
-2. Run in dev mode:
+2. Run in dev mode (MCP server over stdio):
    - npm run dev
-3. List available tools:
-   - node src/server.ts list
-4. Call a tool (example):
-   - node src/server.ts call /scan/list_devices '{}'
+3. Inspect tools and call via mcptools:
+   - mcp tools scan
+   - mcp call /scan/list_devices scan -f pretty
 
 Environment
 - `SCAN_MOCK` (default: `false`): when `true`, mock SANE calls and create fake pages/docs on `start_scan_job` for TDD. Leave as `false` to use your real scanner.
@@ -30,19 +29,19 @@ Device selection and real hardware smoke
 2) By default, when you call `start_scan_job` without a `device_id`, the server will:
    - List devices, probe options, then rank devices by feeder capability (prefers `ADF Duplex` → `ADF`), duplex, resolution match (300dpi), and avoid camera backends like `v4l`.
    - Fill missing `source`/`resolution_dpi`/`color_mode` from device options (prefers `ADF Duplex`, 300dpi, `Color`).
-3) Run with auto-select:
-   - node dist/server.js call /scan/start_scan_job '{}'
-   - Or via Makefile: `make real-start` or `make real-start-auto`
+3) Run with auto-select via MCP:
+   - mcp call /scan/start_scan_job --params '{"resolution_dpi":300}' scan -f pretty
 4) Watch `INBOX_DIR` for `job-*/page_*.tiff` and `doc_*.tiff`; `manifest.json` and `events.jsonl` are written per job.
 
 Project layout
-- src/server.ts — server entry + simple CLI for smoke tests
-- schemas/ — JSON Schema files for tool inputs
+- src/mcp.ts — MCP server entry (tools)
+- src/services/ — hardware + job orchestration
+- schemas/ — JSON Schemas (kept for contract docs/tests)
 - package.json, tsconfig.json — build and dev config
 
 Notes
 - Server routes tool calls to services in `src/services/`.
-- Mock mode is on by default to enable iterative TDD without hardware.
+- Mock mode default is off; set `SCAN_MOCK=1` to generate fake TIFFs for testing.
 - Intelligent device selection implemented (no vendor hardcodes). Use `SCAN_EXCLUDE_BACKENDS`/`SCAN_PREFER_BACKENDS` to tune.
 - Implemented page-count document splitting and multipage TIFF assembly (`tiffcp` preferred; fallback copy).
 - Next: map full ADF/duplex/page-size flags, add blank-page/timer doc-break, and improve error/status details.

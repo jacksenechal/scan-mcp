@@ -4,15 +4,13 @@
   "private": true,
   "type": "module",
   "description": "scan-mcp: MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly",
-  "main": "dist/server.js",
-  "types": "dist/server.d.ts",
+  "main": "dist/mcp.js",
+  "types": "dist/mcp.d.ts",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
-    "dev:mcp": "tsx watch src/mcp.ts",
+    "dev": "tsx watch src/mcp.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "start": "node dist/server.js",
-    "start:mcp": "node dist/mcp.js",
+    "start": "node dist/mcp.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest"
@@ -25,7 +23,7 @@
     "execa": "^9.6.0",
     "pino": "^9.8.0",
     "uuid": "^11.1.0",
-    "zod": "^4.0.17"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^24.2.1",

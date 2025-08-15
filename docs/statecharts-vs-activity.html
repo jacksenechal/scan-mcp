@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Statecharts vs Activity Diagrams — Quick Comparison</title>
+    <style>
+      :root {
+        --bg: #0f172a;         /* slate-900 */
+        --panel: #111827;      /* gray-900 */
+        --text: #e5e7eb;       /* gray-200 */
+        --muted: #9ca3af;      /* gray-400 */
+        --accent: #60a5fa;     /* blue-400 */
+        --border: #1f2937;     /* gray-800 */
+        --row: #0b1220;        /* slightly darker for zebra */
+      }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        background: radial-gradient(1200px 800px at 20% 0%, #0b1220 0%, var(--bg) 60%);
+        color: var(--text);
+      }
+      .container {
+        max-width: 1100px;
+        margin: 40px auto;
+        padding: 0 20px 40px 20px;
+      }
+      h1 {
+        font-size: 1.8rem;
+        margin: 0 0 16px 0;
+      }
+      p.subtitle {
+        margin: 0 0 24px 0;
+        color: var(--muted);
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      thead th {
+        text-align: left;
+        background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0));
+        color: var(--text);
+        padding: 14px 16px;
+        font-weight: 600;
+        border-bottom: 1px solid var(--border);
+      }
+      tbody td {
+        padding: 14px 16px;
+        vertical-align: top;
+        border-bottom: 1px solid var(--border);
+      }
+      tbody tr:nth-child(odd) td { background: var(--row); }
+      tbody tr:hover td { background: #101826; }
+      .feature {
+        width: 24%;
+        font-weight: 600;
+        color: var(--accent);
+      }
+      .note {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+      .footnotes { color: var(--muted); font-size: 0.92rem; margin-top: 10px; }
+      @media (max-width: 800px) {
+        .feature { width: 28%; }
+        thead th { font-size: 0.98rem; }
+        tbody td { font-size: 0.98rem; }
+      }
+      @media print {
+        body { background: #fff; color: #000; }
+        .panel { box-shadow: none; }
+        .feature { color: #000; }
+        .note, .footnotes { color: #333; }
+      }
+      .legend { margin-top: 10px; color: var(--muted); font-size: 0.95rem; }
+      code { background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 4px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Statecharts vs Activity Diagrams — Quick Comparison</h1>
+      <p class="subtitle">A concise, execution-oriented view for workflow design and automation.</p>
+
+      <div class="panel">
+        <table aria-describedby="summary">
+          <thead>
+            <tr>
+              <th scope="col">Aspect</th>
+              <th scope="col">Statecharts</th>
+              <th scope="col">Activity Diagrams</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="feature">Purpose</td>
+              <td>Model an entity's lifecycle; react to events to change state; great for reactive systems.</td>
+              <td>Model control/data flow of tasks; show how work progresses through activities.</td>
+            </tr>
+            <tr>
+              <td class="feature">Core Semantics</td>
+              <td>Event-triggered transitions with guards; entry/exit/do actions; deterministic reactions.</td>
+              <td>Token-flow semantics; an action runs when incoming flows are satisfied.</td>
+            </tr>
+            <tr>
+              <td class="feature">Hierarchy &amp; Concurrency</td>
+              <td>Hierarchical (nested) states, orthogonal regions for parallelism, shallow/deep history.</td>
+              <td>Sub-activities, fork/join for parallel paths; no history concept.</td>
+            </tr>
+            <tr>
+              <td class="feature">Time &amp; Events</td>
+              <td>Native timers, delays, and time events; straightforward retries/backoff.</td>
+              <td>Timing less central in UML; BPMN adds timers and boundary events.</td>
+            </tr>
+            <tr>
+              <td class="feature">Human Workflow</td>
+              <td>Handles human/system events, but not role-centric by default.</td>
+              <td>Swimlanes for roles, user tasks, approvals, SLAs; stakeholder-friendly.</td>
+            </tr>
+            <tr>
+              <td class="feature">Error Handling</td>
+              <td>Global or nested transitions for errors, cancellation, and compensation.</td>
+              <td>Interruptible regions and exception handlers; BPMN is richer here.</td>
+            </tr>
+            <tr>
+              <td class="feature">Execution &amp; Tooling</td>
+              <td>Executable with XState or SCXML; deterministic, resumable runtimes exist.</td>
+              <td>UML activity diagrams less standardized for execution; BPMN has robust engines (Camunda/Zeebe).</td>
+            </tr>
+            <tr>
+              <td class="feature">LLM/Authoring Fit</td>
+              <td>Mermaid <code>stateDiagram-v2</code> maps well to XState/SCXML; easy to constrain.</td>
+              <td>Mermaid flowcharts lack true token semantics; BPMN XML is faithful but heavier.</td>
+            </tr>
+            <tr>
+              <td class="feature">When To Choose</td>
+              <td>Event-driven steps, timers/retries, long-running/resumable, complex guards, parallel regions, strong determinism.</td>
+              <td>Business processes with roles, user tasks, approvals, SLAs, orchestration visibility.</td>
+            </tr>
+            <tr>
+              <td class="feature">Your Workflow Fit</td>
+              <td>Scanning → OCR → conditional review → retries/timeouts → finalize: statecharts fit well (Mermaid subset → XState/SCXML).</td>
+              <td>If role/SLA tracking grows, consider BPMN for those parts; interoperate via events.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="summary" class="legend">Legend: Statecharts = event-driven state machines with hierarchy; Activity diagrams = process/task flow (BPMN akin).</div>
+
+      <p class="footnotes">Tip: You can print or save this page as PDF for sharing.</p>
+    </div>
+  </body>
+  </html>
+

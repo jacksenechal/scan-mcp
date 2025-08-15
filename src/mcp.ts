@@ -18,13 +18,23 @@ export async function main() {
   );
 
   // Tool registrations (MCP high-level API with Zod schemas)
-  server.tool("/scan/list_devices", async () => ({
-    content: [{ type: "text", text: JSON.stringify(await listDevices()) }],
-  }));
+  server.tool(
+    "/scan/list_devices",
+    "List connected scanner devices with basic capabilities",
+    async () => ({
+      content: [{ type: "text", text: JSON.stringify(await listDevices()) }],
+    })
+  );
 
-  server.tool("/scan/get_device_options", { device_id: z.string() }, async (args) => ({
-    content: [{ type: "text", text: JSON.stringify(await getDeviceOptions(args.device_id)) }],
-  }));
+  const GetDeviceOptionsShape = { device_id: z.string() } as const;
+  server.tool(
+    "/scan/get_device_options",
+    "Get SANE options for a specific device (sources, resolutions, modes)",
+    GetDeviceOptionsShape,
+    async (args) => ({
+      content: [{ type: "text", text: JSON.stringify(await getDeviceOptions((args as any).device_id)) }],
+    })
+  );
 
   const StartScanInputShape = {
     device_id: z.string().optional(),
@@ -47,17 +57,33 @@ export async function main() {
     tmp_dir: z.string().optional(),
   } as const;
 
-  server.tool("/scan/start_scan_job", StartScanInputShape, async (args) => ({
-    content: [{ type: "text", text: JSON.stringify(await startScanJob(args as unknown as StartScanInput)) }],
-  }));
+  server.tool(
+    "/scan/start_scan_job",
+    "Start a scan job; auto-selects device and fills defaults when omitted",
+    StartScanInputShape,
+    async (args) => ({
+      content: [{ type: "text", text: JSON.stringify(await startScanJob(args as unknown as StartScanInput)) }],
+    })
+  );
 
-  server.tool("/scan/get_job_status", { job_id: z.string() }, async (args) => ({
-    content: [{ type: "text", text: JSON.stringify(await getJobStatus(args.job_id)) }],
-  }));
+  const JobIdShape = { job_id: z.string() } as const;
+  server.tool(
+    "/scan/get_job_status",
+    "Get status and artifact counts for a job",
+    JobIdShape,
+    async (args) => ({
+      content: [{ type: "text", text: JSON.stringify(await getJobStatus((args as any).job_id)) }],
+    })
+  );
 
-  server.tool("/scan/cancel_job", { job_id: z.string() }, async (args) => ({
-    content: [{ type: "text", text: JSON.stringify(await cancelJob(args.job_id)) }],
-  }));
+  server.tool(
+    "/scan/cancel_job",
+    "Cancel a running scan job",
+    JobIdShape,
+    async (args) => ({
+      content: [{ type: "text", text: JSON.stringify(await cancelJob((args as any).job_id)) }],
+    })
+  );
 
   // Resources can be added later using server.resource(...) once SDK is present.
 
