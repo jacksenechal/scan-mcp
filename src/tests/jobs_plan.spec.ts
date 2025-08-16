@@ -1,10 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { planScanCommands, segmentPages } from "../src/services/jobs";
-import { loadConfig } from "../src/config";
 import path from "path";
+import { planScanCommands, segmentPages } from "../services/jobs.js";
+import type { AppConfig } from "../config.js";
 
-describe("scan command planning", () => {
-  const config = loadConfig();
+const config: AppConfig = {
+  SCAN_MOCK: true,
+  INBOX_DIR: "/tmp",
+  LOG_LEVEL: "silent",
+  SCAN_EXCLUDE_BACKENDS: [],
+  SCAN_PREFER_BACKENDS: [],
+  SCANIMAGE_BIN: "scanimage",
+  TIFFCP_BIN: "tiffcp",
+  IM_CONVERT_BIN: "convert",
+};
+
+describe("command planning", () => {
   const runDir = path.resolve("/tmp/dummy-run");
 
   it("uses scanimage for ADF sources", () => {

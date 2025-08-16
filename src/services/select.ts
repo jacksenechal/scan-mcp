@@ -1,4 +1,4 @@
-import { loadConfig, type AppConfig } from "../config.js";
+import { type AppConfig } from "../config.js";
 import { listDevices, getDeviceOptions, type DeviceOptions } from "./sane.js";
 
 export type SelectionInput = {
@@ -14,25 +14,24 @@ export type SelectionResult = {
 
 export async function selectDevice(
   desired: SelectionInput,
-  config?: AppConfig,
+  config: AppConfig,
   lastUsedId?: string
 ): Promise<SelectionResult | null> {
-  const cfg = config ?? loadConfig();
-  const devices = await listDevices();
+  const devices = await listDevices(config);
   if (devices.length === 0) return null;
 
   const results: SelectionResult[] = [];
   for (const d of devices) {
     const backend = String(d.id.split(":")[0] || "");
     // Exclude backends outright
-    if (cfg.SCAN_EXCLUDE_BACKENDS.includes(backend)) {
+    if (config.SCAN_EXCLUDE_BACKENDS.includes(backend)) {
       results.push({ deviceId: d.id, score: -Infinity, rationale: ["excluded backend:" + backend] });
       continue;
     }
     let score = 0;
     const rationale: string[] = [];
     try {
-      const opts: DeviceOptions = await getDeviceOptions(d.id);
+      const opts: DeviceOptions = await getDeviceOptions(d.id, config);
       const sources = opts.sources ?? [];
       const resolutions = opts.resolutions ?? [];
       const hasAdfDuplex = sources.includes("ADF Duplex");
@@ -70,7 +69,7 @@ export async function selectDevice(
         rationale.push("duplex capable");
       }
 
-      if (cfg.SCAN_PREFER_BACKENDS.includes(backend)) {
+      if (config.SCAN_PREFER_BACKENDS.includes(backend)) {
         score += 5;
         rationale.push("preferred backend:" + backend);
       }

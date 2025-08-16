@@ -1,5 +1,5 @@
 import { execa } from "execa";
-import { loadConfig } from "../config.js";
+import { type AppConfig } from "../config.js";
 import { DEFAULT_SANE_RESOLUTIONS } from "../constants.js";
 import pino from "pino";
 
@@ -19,8 +19,7 @@ export type Device = {
   };
 };
 
-export async function listDevices(): Promise<Device[]> {
-  const config = loadConfig();
+export async function listDevices(config: AppConfig): Promise<Device[]> {
   if (config.SCAN_MOCK) {
     return [
       {
@@ -68,8 +67,7 @@ export type DeviceOptions = {
   duplex?: boolean;
 };
 
-export async function getDeviceOptions(deviceId: string): Promise<DeviceOptions> {
-  const config = loadConfig();
+export async function getDeviceOptions(deviceId: string, config: AppConfig): Promise<DeviceOptions> {
   if (config.SCAN_MOCK) {
     return {
       sources: ["Flatbed", "ADF", "ADF Duplex"],

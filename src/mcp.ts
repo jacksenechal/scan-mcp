@@ -23,7 +23,7 @@ export async function main() {
     "/scan/list_devices",
     "List connected scanner devices with basic capabilities",
     {},
-    async () => ({ content: [{ type: "text", text: JSON.stringify({ devices: await listDevices() }) }] })
+    async () => ({ content: [{ type: "text", text: JSON.stringify({ devices: await listDevices(config) }) }] })
   );
 
   const GetDeviceOptionsShape = z.object({ device_id: z.string() });
@@ -31,7 +31,7 @@ export async function main() {
     "/scan/get_device_options",
     "Get SANE options for a specific device (sources, resolutions, modes)",
     GetDeviceOptionsShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions(GetDeviceOptionsShape.parse(args).device_id)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions(GetDeviceOptionsShape.parse(args).device_id, config)) }] })
   );
 
   const StartScanInputShape = z.object({
@@ -59,7 +59,7 @@ export async function main() {
     "/scan/start_scan_job",
     "Start a scan job; auto-selects device and fills defaults when omitted",
     StartScanInputShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await startScanJob(StartScanInputShape.parse(args))) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await startScanJob(StartScanInputShape.parse(args), config)) }] })
   );
 
   const JobIdShape = z.object({ job_id: z.string() });
@@ -67,14 +67,14 @@ export async function main() {
     "/scan/get_job_status",
     "Get status and artifact counts for a job",
     JobIdShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getJobStatus(JobIdShape.parse(args).job_id)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getJobStatus(JobIdShape.parse(args).job_id, config)) }] })
   );
 
   server.tool(
     "/scan/cancel_job",
     "Cancel a running scan job",
     JobIdShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob(JobIdShape.parse(args).job_id)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob(JobIdShape.parse(args).job_id, config)) }] })
   );
 
   // List jobs tool
@@ -83,7 +83,7 @@ export async function main() {
     "/scan/list_jobs",
     "List recent scan jobs from the inbox directory",
     ListJobsInput.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(ListJobsInput.parse(args)) }) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(config, ListJobsInput.parse(args)) }) }] })
   );
 
   // Resources: manifest and events per-job

@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
 import fs from "fs";
 import path from "path";
-import { startScanJob, getJobStatus, cancelJob, listJobs } from "../src/services/jobs";
-import { loadConfig } from "../src/config";
+import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/jobs.js";
+import { type AppConfig } from "../config.js";
 
 const tmpInboxDir = path.resolve(__dirname, ".tmp-inbox-jobs-api");
 
@@ -14,11 +14,18 @@ vi.mock('execa', () => ({
 }));
 
 describe("jobs api", () => {
-  const config = loadConfig();
+  const config: AppConfig = {
+    SCAN_MOCK: true,
+    INBOX_DIR: tmpInboxDir,
+    LOG_LEVEL: "silent",
+    SCAN_EXCLUDE_BACKENDS: [],
+    SCAN_PREFER_BACKENDS: [],
+    SCANIMAGE_BIN: "scanimage",
+    TIFFCP_BIN: "tiffcp",
+    IM_CONVERT_BIN: "convert",
+  };
 
   beforeAll(() => {
-    process.env.SCAN_MOCK = "1"; // Set SCAN_MOCK to true
-    process.env.INBOX_DIR = tmpInboxDir; // Set INBOX_DIR to a temporary path
     fs.mkdirSync(tmpInboxDir, { recursive: true });
   });
 
@@ -37,24 +44,25 @@ describe("jobs api", () => {
   });
 
   it("should get job status", async () => {
-    const { job_id } = await startScanJob({});
-    const status = await getJobStatus(job_id);
+    const { job_id } = await startScanJob({}, config);
+    const status = await getJobStatus(job_id, config);
     expect(status.job_id).toBe(job_id);
     expect(status.state).toBe("completed");
   });
 
   it("should cancel a job", async () => {
-    const { job_id } = await startScanJob({});
-    const result = await cancelJob(job_id);
+    const { job_id } = await startScanJob({}, config);
+    const result = await cancelJob(job_id, config);
     expect(result.ok).toBe(true);
-    const status = await getJobStatus(job_id);
+    const status = await getJobStatus(job_id, config);
     expect(status.state).toBe("cancelled");
   });
 
   it("should list jobs", async () => {
-    await startScanJob({});
-    await startScanJob({});
-    const jobs = await listJobs({});
+    await startScanJob({}, config);
+    await startScanJob({}, config);
+    const jobs = await listJobs(config, {});
     expect(jobs).toHaveLength(2);
   });
 });
+

@@ -1,13 +1,15 @@
 import path from "path";
 import { describe, it, expect, beforeEach } from "vitest";
 import fs from "fs";
-import Ajv from "ajv";
+import _Ajv from "ajv";
+
+const Ajv = _Ajv as unknown as typeof _Ajv.default;
 
 const schemasDir = path.resolve(__dirname, "..", "schemas");
 
 // Function to load all schemas
-function loadAllSchemas(dir: string): Record<string, any> {
-  const schemas: Record<string, any> = {};
+function loadAllSchemas(dir: string): Record<string, unknown> {
+  const schemas: Record<string, unknown> = {};
   const files = fs.readdirSync(dir);
   for (const file of files) {
     if (file.endsWith(".json")) {
@@ -20,15 +22,15 @@ function loadAllSchemas(dir: string): Record<string, any> {
 }
 
 describe("JSON Schemas", () => {
-  let ajv: Ajv;
-  let loadedSchemas: Record<string, any>;
+  let ajv: _Ajv.default;
+  let loadedSchemas: Record<string, unknown>;
 
   beforeEach(() => {
     ajv = new Ajv();
     loadedSchemas = loadAllSchemas(schemasDir);
     // Add all loaded schemas to Ajv instance for $ref resolution
     for (const key in loadedSchemas) {
-      ajv.addSchema(loadedSchemas[key], key);
+      ajv.addSchema(loadedSchemas[key] as any, key);
     }
   });
 
@@ -40,7 +42,7 @@ describe("JSON Schemas", () => {
     const listDevicesSchema = loadedSchemas["list_devices.schema.json"];
     expect(listDevicesSchema).toBeDefined();
 
-    const validate = ajv.compile(listDevicesSchema);
+    const validate = ajv.compile(listDevicesSchema as any);
 
     // Example of valid data for list_devices (adjust based on actual schema)
     const validData = {};
@@ -59,7 +61,7 @@ describe("JSON Schemas", () => {
   it("should validate start_scan_job schema", () => {
     const startScanJobSchema = loadedSchemas["start_scan_job.schema.json"];
     expect(startScanJobSchema).toBeDefined();
-    const validate = ajv.compile(startScanJobSchema);
+    const validate = ajv.compile(startScanJobSchema as any);
 
     const validData = {
       device_id: "my_scanner",

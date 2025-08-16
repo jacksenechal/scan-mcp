@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
 import fs from "fs";
 import path from "path";
-import { startScanJob, getJobStatus, cancelJob, listJobs } from "../src/services/jobs";
-import { loadConfig } from "../src/config";
+import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/jobs.js";
+import { type AppConfig } from "../config.js";
 
 const tmpInboxDir = path.resolve(__dirname, ".tmp-inbox-integration");
 
@@ -14,11 +14,18 @@ vi.mock('execa', () => ({
 }));
 
 describe("integration tests", () => {
-  const config = loadConfig();
+  const config: AppConfig = {
+    SCAN_MOCK: true,
+    INBOX_DIR: tmpInboxDir,
+    LOG_LEVEL: "silent",
+    SCAN_EXCLUDE_BACKENDS: [],
+    SCAN_PREFER_BACKENDS: [],
+    SCANIMAGE_BIN: "scanimage",
+    TIFFCP_BIN: "tiffcp",
+    IM_CONVERT_BIN: "convert",
+  };
 
   beforeAll(() => {
-    process.env.SCAN_MOCK = "1"; // Use mock scanner for integration tests
-    process.env.INBOX_DIR = tmpInboxDir; // Set INBOX_DIR to a temporary path
     fs.mkdirSync(tmpInboxDir, { recursive: true });
   });
 
@@ -37,7 +44,7 @@ describe("integration tests", () => {
   });
 
   it("should complete a full scan job workflow", async () => {
-    const { job_id, run_dir, state } = await startScanJob({});
+    const { job_id, run_dir, state } = await startScanJob({}, config);
 
     expect(job_id).toBeDefined();
     expect(run_dir).toBeDefined();
@@ -55,7 +62,7 @@ describe("integration tests", () => {
     expect(manifest.documents.length).toBeGreaterThan(0);
 
     // Verify job status
-    const status = await getJobStatus(job_id);
+    const status = await getJobStatus(job_id, config);
     expect(status.job_id).toBe(job_id);
     expect(status.state).toBe("completed");
     expect(status.pages).toBe(manifest.pages.length);
@@ -63,23 +70,23 @@ describe("integration tests", () => {
   });
 
   it("should cancel a job and reflect the status", async () => {
-    const { job_id } = await startScanJob({});
+    const { job_id } = await startScanJob({}, config);
 
-    const cancelResult = await cancelJob(job_id);
+    const cancelResult = await cancelJob(job_id, config);
     expect(cancelResult.ok).toBe(true);
 
     await new Promise(resolve => setTimeout(resolve, 100)); // Add a small delay
 
-    const status = await getJobStatus(job_id);
+    const status = await getJobStatus(job_id, config);
     expect(status.state).toBe("cancelled");
   });
 
   it("should list multiple jobs", async () => {
-    await startScanJob({});
-    await startScanJob({});
-    await startScanJob({});
+    await startScanJob({}, config);
+    await startScanJob({}, config);
+    await startScanJob({}, config);
 
-    const jobs = await listJobs({});
+    const jobs = await listJobs(config, {});
     expect(jobs.length).toBeGreaterThanOrEqual(3);
 
     // Verify job states are correct

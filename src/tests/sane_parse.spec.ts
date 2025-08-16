@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseScanimageList, parseScanimageOptions } from "../src/services/sane";
+import { parseScanimageList, parseScanimageOptions } from "../services/sane.js";
 
 describe("sane parsers", () => {
   it("parses scanimage -L output", () => {
