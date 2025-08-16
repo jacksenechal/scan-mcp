@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { execa } from "execa";
 import { loadConfig, type AppConfig } from "../config.js";
+import { MOCK_PAGE_COUNT, DEFAULT_RESOLUTION_DPI, LETTER_WIDTH_MM, LETTER_HEIGHT_MM, A4_WIDTH_MM, A4_HEIGHT_MM, LEGAL_WIDTH_MM, LEGAL_HEIGHT_MM } from "../constants.js";
 import { selectDevice } from "./select.js";
 import { getDeviceOptions } from "./sane.js";
 
@@ -70,7 +71,7 @@ async function initializeJob(input: StartScanInput, config: AppConfig): Promise<
 async function runScan(runDir: string, manifest: Manifest, eventsPath: string, config: AppConfig): Promise<boolean> {
   if (config.SCAN_MOCK) {
     // Create a couple of fake TIFFs to simulate capture
-    const pageCount = 2;
+    const pageCount = MOCK_PAGE_COUNT;
     for (let i = 1; i <= pageCount; i++) {
       const p = path.join(runDir, `page_${String(i).padStart(4, "0")}.tiff`);
       fs.writeFileSync(p, `MOCK_TIFF_PAGE_${i}`);
@@ -308,7 +309,7 @@ export async function resolveEffectiveInput(input: StartScanInput, config?: AppC
         out.source = "ADF Duplex";
       }
       if (!out.resolution_dpi && opts.resolutions && opts.resolutions.length) {
-        out.resolution_dpi = opts.resolutions.includes(300) ? 300 : opts.resolutions[opts.resolutions.length - 1];
+        out.resolution_dpi = opts.resolutions.includes(DEFAULT_RESOLUTION_DPI) ? DEFAULT_RESOLUTION_DPI : opts.resolutions[opts.resolutions.length - 1];
       }
       if (!out.color_mode && opts.color_modes && opts.color_modes.length) {
         const selectedMode = opts.color_modes.includes("Color") ? "Color" : opts.color_modes[0];
@@ -320,7 +321,7 @@ export async function resolveEffectiveInput(input: StartScanInput, config?: AppC
   }
 
   if (!out.source) out.source = "Flatbed";
-  if (!out.resolution_dpi) out.resolution_dpi = 300;
+  if (!out.resolution_dpi) out.resolution_dpi = DEFAULT_RESOLUTION_DPI;
 
   return out;
 }
@@ -331,11 +332,11 @@ function pageSizeMm(input: StartScanInput): { width: number; height: number } | 
   }
   switch (input.page_size) {
     case "Letter":
-      return { width: 215.9, height: 279.4 };
+      return { width: LETTER_WIDTH_MM, height: LETTER_HEIGHT_MM };
     case "A4":
-      return { width: 210, height: 297 };
+      return { width: A4_WIDTH_MM, height: A4_HEIGHT_MM };
     case "Legal":
-      return { width: 215.9, height: 355.6 };
+      return { width: LEGAL_WIDTH_MM, height: LEGAL_HEIGHT_MM };
     default:
       return null;
   }

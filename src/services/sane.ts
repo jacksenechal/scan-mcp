@@ -1,5 +1,6 @@
 import { execa } from "execa";
 import { loadConfig } from "../config.js";
+import { DEFAULT_SANE_RESOLUTIONS } from "../constants.js";
 import pino from "pino";
 
 const logger = pino();
@@ -27,7 +28,7 @@ export async function listDevices(): Promise<Device[]> {
         vendor: "FUJITSU",
         model: "ScanSnap",
         saneName: "epjitsu0",
-        capabilities: { adf: true, duplex: true, color_modes: ["Color", "Gray"], resolutions: [200, 300, 600] },
+        capabilities: { adf: true, duplex: true, color_modes: ["Color", "Gray"], resolutions: DEFAULT_SANE_RESOLUTIONS },
       },
     ];
   }
@@ -73,7 +74,7 @@ export async function getDeviceOptions(deviceId: string): Promise<DeviceOptions>
     return {
       sources: ["Flatbed", "ADF", "ADF Duplex"],
       color_modes: ["Color", "Gray", "Lineart"],
-      resolutions: [200, 300, 600],
+      resolutions: DEFAULT_SANE_RESOLUTIONS,
       adf: true,
       duplex: true,
     };
