@@ -352,7 +352,7 @@ function pageSizeMm(input: StartScanInput): { width: number; height: number } | 
 }
 
 function stateDir(config: AppConfig) {
-  const base = path.resolve(config.INBOX_DIR, "..", ".state");
+  const base = path.resolve(config.INBOX_DIR, "..", "..", ".state");
   fs.mkdirSync(base, { recursive: true });
   return base;
 }

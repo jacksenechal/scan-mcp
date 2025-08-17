@@ -2,10 +2,11 @@ import path from "path";
 import { describe, it, expect, beforeEach } from "vitest";
 import fs from "fs";
 import _Ajv from "ajv";
+import type { AnySchema } from "ajv";
 
 const Ajv = _Ajv as unknown as typeof _Ajv.default;
 
-const schemasDir = path.resolve(__dirname, "..", "schemas");
+const schemasDir = path.resolve(__dirname, "..", "..", "schemas");
 
 // Function to load all schemas
 function loadAllSchemas(dir: string): Record<string, unknown> {
@@ -30,7 +31,7 @@ describe("JSON Schemas", () => {
     loadedSchemas = loadAllSchemas(schemasDir);
     // Add all loaded schemas to Ajv instance for $ref resolution
     for (const key in loadedSchemas) {
-      ajv.addSchema(loadedSchemas[key] as any, key);
+      ajv.addSchema(loadedSchemas[key] as AnySchema, key);
     }
   });
 
@@ -39,10 +40,10 @@ describe("JSON Schemas", () => {
   });
 
   it("should validate a simple schema (e.g., list_devices)", () => {
-    const listDevicesSchema = loadedSchemas["list_devices.schema.json"];
+    const listDevicesSchema = loadedSchemas["list_devices.schema.json"] as AnySchema;
     expect(listDevicesSchema).toBeDefined();
 
-    const validate = ajv.compile(listDevicesSchema as any);
+    const validate = ajv.compile(listDevicesSchema);
 
     // Example of valid data for list_devices (adjust based on actual schema)
     const validData = {};
@@ -59,9 +60,9 @@ describe("JSON Schemas", () => {
 
   // Add more tests for specific schemas and validation rules
   it("should validate start_scan_job schema", () => {
-    const startScanJobSchema = loadedSchemas["start_scan_job.schema.json"];
+    const startScanJobSchema = loadedSchemas["start_scan_job.schema.json"] as AnySchema;
     expect(startScanJobSchema).toBeDefined();
-    const validate = ajv.compile(startScanJobSchema as any);
+    const validate = ajv.compile(startScanJobSchema);
 
     const validData = {
       device_id: "my_scanner",
