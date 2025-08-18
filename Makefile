@@ -2,14 +2,29 @@ SHELL := /usr/bin/bash
 .ONESHELL:
 
 # Local dev Makefile for scan-mcp only
+# Configure nvm path if available; fall back to system node otherwise
 NVM_DIR ?= $(HOME)/.nvm
 NVM_SH  ?= /usr/share/nvm/nvm.sh
 NODE_VERSION ?= 22
 
 define NVM_ACTIVATE
   export NVM_DIR="$(NVM_DIR)";
-  if [ -s "$(NVM_SH)" ]; then source "$(NVM_SH)"; else echo "nvm.sh not found at $(NVM_SH)"; exit 1; fi;
-  nvm use $(NODE_VERSION) >/dev/null
+  if [ -s "$(NVM_SH)" ]; then
+    source "$(NVM_SH)";
+    nvm use $(NODE_VERSION) >/dev/null;
+  else
+    echo "nvm.sh not found at $(NVM_SH); falling back to system node";
+    if command -v node >/dev/null; then
+      current_node=$$(node -v);
+      case $$current_node in
+        v$(NODE_VERSION).*) echo "Using system node $$current_node";;
+        *) echo "Error: Node $(NODE_VERSION) required, found $$current_node"; exit 1;;
+      esac;
+    else
+      echo "Error: node not found and nvm missing";
+      exit 1;
+    fi;
+  fi
 endef
 
 .PHONY: node
@@ -58,10 +73,10 @@ tools:
 verify:
 	$(MAKE) install
 	$(MAKE) typecheck
-	$(MAKE) lint
-	$(MAKE) build
-	$(MAKE) test
-	$(MAKE) list
+        $(MAKE) lint
+        $(MAKE) build
+        $(MAKE) test
+        $(MAKE) tools
 
 .PHONY: real-scan
 # Example: make real-scan ARGS='{"resolution_dpi":300}'
