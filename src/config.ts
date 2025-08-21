@@ -16,7 +16,8 @@ export const ConfigSchema = z.object({
 export type AppConfig = z.infer<typeof ConfigSchema>;
 
 export function loadConfig(): AppConfig {
-  dotenv.config();
+  // Quiet dotenv to avoid writing to stdout which would break MCP stdio
+  dotenv.config({ quiet: true });
   const env = {
     LOG_LEVEL: process.env.LOG_LEVEL,
     INBOX_DIR: process.env.INBOX_DIR,

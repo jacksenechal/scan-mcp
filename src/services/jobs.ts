@@ -85,8 +85,17 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
   const candidates = planScanCommands(manifest.params, runDir, config);
   let ran = false; // Initialize ran to false
   for (const c of candidates) {
+    let outStream: fs.WriteStream | undefined
+    let errStream: fs.WriteStream | undefined
     try {
-      const proc = execa(c.bin, c.args, { cwd: runDir, shell: false, stdio: "inherit" });
+      // Do not inherit stdio; pipe and persist logs to files to avoid polluting MCP stdout
+      const proc = execa(c.bin, c.args, { cwd: runDir, shell: false });
+      const outPath = path.join(runDir, "scanner.out.log");
+      const errPath = path.join(runDir, "scanner.err.log");
+      outStream = fs.createWriteStream(outPath, { flags: "a" });
+      errStream = fs.createWriteStream(errPath, { flags: "a" });
+      proc.stdout?.pipe(outStream);
+      proc.stderr?.pipe(errStream);
       activeJobs.set(manifest.job_id, proc);
       await proc;
       ran = true;
@@ -96,6 +105,8 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
       continue;
     } finally {
       activeJobs.delete(manifest.job_id);
+      try { outStream?.end(); } catch {}
+      try { errStream?.end(); } catch {}
     }
   }
   return ran; // Return ran

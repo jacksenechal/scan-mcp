@@ -1,6 +1,6 @@
 # scan-mcp
 
-Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly. This package exposes an MCP server only (no standalone CLI).
+Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly.
 
 Purpose
 - Provide a small, typed MCP server that exposes tools for device discovery and starting scan jobs.
@@ -11,10 +11,56 @@ Quickstart (development)
 1. Install dev deps:
    - npm install
 2. Run in dev mode (MCP server over stdio):
-   - npm run dev
+   - Do not start the server via any `npm run …` command from an MCP client; npm prints a preamble and/or suppresses stdio, which breaks the MCP protocol.
+   - For MCP clients, launch one of these directly:
+     - `node /absolute/path/to/mcp/scan-mcp/dist/mcp.js`
+     - `scan-mcp` (after `npm link`)
+   - For local development only (not via MCP clients), `npm run dev` is fine in a terminal.
 3. Inspect tools and call via mcptools:
    - mcp tools scan
    - mcp call /scan/list_devices scan -f pretty
+
+Run Anywhere (CLI)
+- Global install (dev):
+  - npm ci && npm link  # builds via prepare and installs `scan-mcp` on PATH
+- Use with mcptools:
+  - mcp tools scan-mcp
+  - mcp call /scan/list_devices scan-mcp -f pretty
+- Without linking, you can also run directly:
+  - node /absolute/path/to/mcp/scan-mcp/dist/mcp.js
+  - Or from repo root: npm --prefix mcp/scan-mcp start
+
+MCP Server Config (JSON)
+- Example client config block to register this server:
+```
+{
+  "mcpServers": {
+    "scan": {
+      "command": "scan-mcp",
+      "args": [],
+      "env": {
+        "INBOX_DIR": "/home/jack/workspace/scan-agent/scanned_documents/inbox",
+        "LOG_LEVEL": "info",
+        "SCAN_MOCK": "0"
+      }
+    }
+  }
+}
+```
+- If you prefer not to use `npm link`, substitute a direct Node command:
+```
+{
+  "mcpServers": {
+    "scan": {
+      "command": "node",
+      "args": [
+        "/home/jack/workspace/scan-agent/mcp/scan-mcp/dist/mcp.js"
+      ],
+      "env": { "INBOX_DIR": "/home/jack/workspace/scan-agent/scanned_documents/inbox" }
+    }
+  }
+}
+```
 
 Environment
 - `SCAN_MOCK` (default: `false`): when `true`, mock SANE calls and create fake pages/docs on `start_scan_job` for TDD. Leave as `false` to use your real scanner.

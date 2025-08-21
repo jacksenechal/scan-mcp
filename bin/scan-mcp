@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+// Lightweight launcher that runs the built MCP server from anywhere.
+// Resolves the dist entry relative to this script so CWD does not matter.
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+async function run() {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const entry = path.resolve(here, '..', 'dist', 'mcp.js');
+    const mod = await import(pathToFileURL(entry).href);
+    if (typeof mod.main !== 'function') {
+      console.error('scan-mcp: entry missing exported main() — did you build?');
+      process.exit(1);
+    }
+    await mod.main();
+  } catch (err) {
+    console.error('scan-mcp: failed to start MCP server', err);
+    process.exit(1);
+  }
+}
+
+run();
+

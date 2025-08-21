@@ -10,7 +10,8 @@ import { listDevices, getDeviceOptions } from "./services/sane.js";
 import { startScanJob, getJobStatus, cancelJob, listJobs } from "./services/jobs.js";
 
 const config = loadConfig();
-const logger = pino({ level: config.LOG_LEVEL });
+// Send logs to stderr to keep stdout clean for MCP protocol
+const logger = pino({ level: config.LOG_LEVEL }, pino.destination({ fd: 2 }));
 
 export async function main() {
   const server = new McpServer(
