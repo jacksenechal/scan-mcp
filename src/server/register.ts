@@ -8,16 +8,16 @@ import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/job
 
 export function registerScanServer(server: McpServer, config: AppConfig) {
   // Tools
+  // No input schema so clients may omit params entirely
   server.tool(
-    "/scan/list_devices",
+    "list_devices",
     "List connected scanner devices with basic capabilities",
-    {},
     async () => ({ content: [{ type: "text", text: JSON.stringify({ devices: await listDevices(config) }) }] })
   );
 
   const GetDeviceOptionsShape = z.object({ device_id: z.string() });
   server.tool(
-    "/scan/get_device_options",
+    "get_device_options",
     "Get SANE options for a specific device (sources, resolutions, modes)",
     GetDeviceOptionsShape.shape,
     async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions(GetDeviceOptionsShape.parse(args).device_id, config)) }] })
@@ -45,7 +45,7 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
   });
 
   server.tool(
-    "/scan/start_scan_job",
+    "start_scan_job",
     "Start a scan job; auto-selects device and fills defaults when omitted",
     StartScanInputShape.shape,
     async (args) => ({ content: [{ type: "text", text: JSON.stringify(await startScanJob(StartScanInputShape.parse(args), config)) }] })
@@ -53,14 +53,14 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
 
   const JobIdShape = z.object({ job_id: z.string() });
   server.tool(
-    "/scan/get_job_status",
+    "get_job_status",
     "Get status and artifact counts for a job",
     JobIdShape.shape,
     async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getJobStatus(JobIdShape.parse(args).job_id, config)) }] })
   );
 
   server.tool(
-    "/scan/cancel_job",
+    "cancel_job",
     "Cancel a running scan job",
     JobIdShape.shape,
     async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob(JobIdShape.parse(args).job_id, config)) }] })
@@ -68,7 +68,7 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
 
   const ListJobsInput = z.object({ limit: z.number().int().positive().max(100).optional(), state: z.enum(["running", "completed", "cancelled", "error", "unknown"]).optional() });
   server.tool(
-    "/scan/list_jobs",
+    "list_jobs",
     "List recent scan jobs from the inbox directory",
     ListJobsInput.shape,
     async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(config, ListJobsInput.parse(args)) }) }] })
@@ -111,4 +111,3 @@ function fsSafeRead(p: string): string | null {
     return null;
   }
 }
-

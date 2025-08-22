@@ -23,14 +23,14 @@ Quickstart (development)
    - For local development only (not via MCP clients), `npm run dev` is fine in a terminal.
 3. Inspect tools and call via mcptools:
    - mcp tools scan
-   - mcp call /scan/list_devices scan -f pretty
+   - mcp call list_devices scan -f pretty
 
 Run Anywhere (CLI)
 - Global install (dev):
   - npm ci && npm link  # builds via prepare and installs `scan-mcp` on PATH
 - Use with mcptools:
   - mcp tools scan-mcp
-  - mcp call /scan/list_devices scan-mcp -f pretty
+  - mcp call list_devices scan-mcp -f pretty
 - Without linking, you can also run directly:
   - node /absolute/path/to/mcp/scan-mcp/dist/mcp.js
   - Or from repo root: npm --prefix mcp/scan-mcp start
@@ -81,7 +81,7 @@ Device selection and real hardware smoke
    - List devices, probe options, then rank devices by feeder capability (prefers `ADF Duplex` → `ADF`), duplex, resolution match (300dpi), and avoid camera backends like `v4l`.
    - Fill missing `source`/`resolution_dpi`/`color_mode` from device options (prefers `ADF Duplex`, 300dpi, `Color`).
 3) Run with auto-select via MCP:
-   - mcp call /scan/start_scan_job --params '{"resolution_dpi":300}' scan -f pretty
+   - mcp call start_scan_job --params '{"resolution_dpi":300}' scan -f pretty
 4) Watch `INBOX_DIR` for `job-*/page_*.tiff` and `doc_*.tiff`; `manifest.json` and `events.jsonl` are written per job.
 
 Project layout
