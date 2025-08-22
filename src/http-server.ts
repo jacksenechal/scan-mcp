@@ -4,7 +4,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import pino from "pino";
+import { createLogger, maskAuthHeaders } from "./server/logger.js";
 import { loadConfig } from "./config.js";
 import { registerScanServer } from "./server/register.js";
 
@@ -12,9 +12,15 @@ type SseSession = { server: McpServer; transport: SSEServerTransport };
 
 export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: boolean } = {}) {
   const config = loadConfig();
-  const logger = pino({ level: config.LOG_LEVEL }, pino.destination({ fd: 2 }));
+  const logger = createLogger("http", config.LOG_LEVEL);
   const app = express();
   app.use(express.json({ limit: "4mb" }));
+
+  // Debug incoming requests (headers masked)
+  app.use((req, _res, next) => {
+    logger.debug({ method: req.method, url: req.url, headers: maskAuthHeaders(req.headers) }, "http request");
+    next();
+  });
 
   const sseSessions: Record<string, SseSession> = {};
   const enableStreamable = opts.enableStreamable !== false; // default true
@@ -59,12 +65,16 @@ export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: 
       sseSessions[transport.sessionId] = { server, transport };
       res.on("close", () => { delete sseSessions[transport.sessionId]; });
       await server.connect(transport);
+      logger.info({ sessionId: transport.sessionId }, "SSE session started");
     });
 
     app.post("/messages", async (req: Request, res: Response) => {
       const sessionId = String(req.query.sessionId ?? "");
       const session = sseSessions[sessionId];
-      if (!session) return res.status(400).send("No transport found for sessionId");
+      if (!session) {
+        logger.warn({ sessionId }, "SSE POST with unknown sessionId");
+        return res.status(400).send("No transport found for sessionId");
+      }
       await session.transport.handlePostMessage(
         req as unknown as IncomingMessage & { auth?: AuthInfo },
         res as unknown as ServerResponse,

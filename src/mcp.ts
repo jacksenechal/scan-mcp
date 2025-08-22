@@ -1,6 +1,6 @@
 import { fileURLToPath } from "url";
 import path from "path";
-import pino from "pino";
+import { createLogger } from "./server/logger.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config.js";
@@ -8,7 +8,7 @@ import { registerScanServer } from "./server/register.js";
 
 const config = loadConfig();
 // Send logs to stderr to keep stdout clean for MCP protocol
-const logger = pino({ level: config.LOG_LEVEL }, pino.destination({ fd: 2 }));
+const logger = createLogger("stdio", config.LOG_LEVEL);
 
 export async function main() {
   const server = new McpServer(
