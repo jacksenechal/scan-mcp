@@ -34,7 +34,13 @@ export async function listDevices(config: AppConfig): Promise<Device[]> {
 
   try {
     const { stdout } = await execa(config.SCANIMAGE_BIN, ["-L"], { shell: false });
-    return parseScanimageList(stdout);
+    const devices = parseScanimageList(stdout);
+    // Filter out excluded backends (e.g., v4l by default)
+    const filtered = devices.filter((d) => {
+      const backend = String(d.id.split(":")[0] || "");
+      return !config.SCAN_EXCLUDE_BACKENDS.includes(backend);
+    });
+    return filtered;
   } catch (err) {
     logger.error(err, "Failed to list devices");
     return [];

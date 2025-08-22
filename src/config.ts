@@ -9,7 +9,8 @@ export const ConfigSchema = z.object({
   SCANIMAGE_BIN: z.string().default("scanimage"),
   TIFFCP_BIN: z.string().default("tiffcp"),
   IM_CONVERT_BIN: z.string().default("convert"),
-  SCAN_EXCLUDE_BACKENDS: z.array(z.string()).default([]),
+  // By default, exclude camera-like backends like v4l from device lists
+  SCAN_EXCLUDE_BACKENDS: z.array(z.string()).default(["v4l"]),
   SCAN_PREFER_BACKENDS: z.array(z.string()).default([]),
 });
 
