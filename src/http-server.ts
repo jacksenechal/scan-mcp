@@ -18,9 +18,30 @@ export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: 
 
   // Debug incoming requests (headers masked)
   app.use((req, _res, next) => {
-    logger.debug({ method: req.method, url: req.url, headers: maskAuthHeaders(req.headers) }, "http request");
+    const headers = maskAuthHeaders(req.headers);
+    const payload = (req as unknown as { body?: unknown }).body;
+    const rpc = summarizeRpc(payload);
+    logger.debug({ method: req.method, url: req.url, headers, rpc }, "http request");
     next();
   });
+
+  function summarizeRpc(payload: unknown): { method?: string; id?: unknown; tool?: string } | undefined {
+    try {
+      const msg = Array.isArray(payload) ? payload[0] : payload;
+      if (msg && typeof msg === "object") {
+        const m = msg as { method?: unknown; id?: unknown; params?: unknown };
+        const out: { method?: string; id?: unknown; tool?: string } = {};
+        if (typeof m.method === "string") out.method = m.method;
+        if (m.id !== undefined) out.id = m.id;
+        if (m.params && typeof m.params === "object") {
+          const p = m.params as { name?: unknown };
+          if (typeof p.name === "string") out.tool = p.name;
+        }
+        return out;
+      }
+    } catch {}
+    return undefined;
+  }
 
   const sseSessions: Record<string, SseSession> = {};
   const enableStreamable = opts.enableStreamable !== false; // default true
@@ -75,6 +96,9 @@ export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: 
         logger.warn({ sessionId }, "SSE POST with unknown sessionId");
         return res.status(400).send("No transport found for sessionId");
       }
+      const payload = (req as unknown as { body?: unknown }).body;
+      const rpc = summarizeRpc(payload);
+      logger.debug({ sessionId, rpc }, "sse message");
       await session.transport.handlePostMessage(
         req as unknown as IncomingMessage & { auth?: AuthInfo },
         res as unknown as ServerResponse,

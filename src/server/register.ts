@@ -23,25 +23,27 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions(GetDeviceOptionsShape.parse(args).device_id, config)) }] })
   );
 
+  const nullToUndef = <T extends z.ZodTypeAny>(schema: T) => z.preprocess((v) => (v === null ? undefined : v), schema.optional());
+
   const StartScanInputShape = z.object({
-    device_id: z.string().optional(),
-    resolution_dpi: z.number().int().optional(),
-    color_mode: z.enum(["Color", "Gray", "Lineart"]).optional(),
-    source: z.enum(["Flatbed", "ADF", "ADF Duplex"]).optional(),
-    duplex: z.boolean().optional(),
-    page_size: z.enum(["Letter", "A4", "Legal", "Custom"]).optional(),
-    custom_size_mm: z.object({ width: z.number(), height: z.number() }).optional(),
-    doc_break_policy: z
-      .object({
-        type: z.enum(["blank_page", "page_count", "timer", "barcode", "none"]).optional(),
-        blank_threshold: z.number().optional(),
-        page_count: z.number().int().optional(),
-        timer_ms: z.number().int().optional(),
-        barcode_values: z.array(z.string()).optional(),
+    device_id: nullToUndef(z.string()),
+    resolution_dpi: nullToUndef(z.number().int()),
+    color_mode: nullToUndef(z.enum(["Color", "Gray", "Lineart"])),
+    source: nullToUndef(z.enum(["Flatbed", "ADF", "ADF Duplex"])),
+    duplex: nullToUndef(z.boolean()),
+    page_size: nullToUndef(z.enum(["Letter", "A4", "Legal", "Custom"])),
+    custom_size_mm: nullToUndef(z.object({ width: z.number(), height: z.number() })),
+    doc_break_policy: nullToUndef(
+      z.object({
+        type: nullToUndef(z.enum(["blank_page", "page_count", "timer", "barcode", "none"])),
+        blank_threshold: nullToUndef(z.number()),
+        page_count: nullToUndef(z.number().int()),
+        timer_ms: nullToUndef(z.number().int()),
+        barcode_values: nullToUndef(z.array(z.string())),
       })
-      .optional(),
-    output_format: z.string().optional(),
-    tmp_dir: z.string().optional(),
+    ),
+    output_format: nullToUndef(z.string()),
+    tmp_dir: nullToUndef(z.string()),
   });
 
   server.tool(
@@ -66,7 +68,10 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob(JobIdShape.parse(args).job_id, config)) }] })
   );
 
-  const ListJobsInput = z.object({ limit: z.number().int().positive().max(100).optional(), state: z.enum(["running", "completed", "cancelled", "error", "unknown"]).optional() });
+  const ListJobsInput = z.object({
+    limit: nullToUndef(z.number().int().positive().max(100)),
+    state: nullToUndef(z.enum(["running", "completed", "cancelled", "error", "unknown"]))
+  });
   server.tool(
     "list_jobs",
     "List recent scan jobs from the inbox directory",
