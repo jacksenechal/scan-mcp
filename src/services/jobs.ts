@@ -13,7 +13,8 @@ const activeJobs = new Map<string, Subprocess>();
 export type StartScanInput = {
   device_id?: string;
   resolution_dpi?: number;
-  color_mode?: "Color" | "Gray" | "Lineart";
+  // SANE backends vary (e.g., Halftone, Binary, Gray16); accept any string
+  color_mode?: string;
   source?: "Flatbed" | "ADF" | "ADF Duplex";
   duplex?: boolean;
   page_size?: "Letter" | "A4" | "Legal" | "Custom";
@@ -350,17 +351,18 @@ export async function resolveEffectiveInput(input: StartScanInput, config: AppCo
           }
         }
       }
-      if (!out.color_mode && opts.color_modes && opts.color_modes.length) {
-        // Prefer Lineart for documents, then Gray, then Color
-        const modes = opts.color_modes;
-        const selectedMode = modes.includes("Lineart")
-          ? "Lineart"
-          : modes.includes("Gray")
-            ? "Gray"
-            : modes.includes("Color")
-              ? "Color"
-              : (modes[0] as StartScanInput["color_mode"]);
-        out.color_mode = selectedMode as StartScanInput["color_mode"];
+      if (opts.color_modes && opts.color_modes.length) {
+        const available = opts.color_modes;
+        // If user provided a color_mode, normalize to an available mode (case-insensitive)
+        if (out.color_mode) {
+          const match = available.find((m) => m.toLowerCase() === String(out.color_mode).toLowerCase());
+          if (match) out.color_mode = match;
+        } else {
+          // Prefer Lineart → Gray → Halftone → Color; otherwise first available
+          const pref = ["Lineart", "Gray", "Halftone", "Color"];
+          const selected = pref.find((p) => available.some((m) => m.toLowerCase() === p.toLowerCase())) ?? available[0];
+          out.color_mode = selected;
+        }
       }
     } catch {
       // If the provided device_id cannot be probed, drop it and fall back to selection

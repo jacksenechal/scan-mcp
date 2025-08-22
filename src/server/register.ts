@@ -28,7 +28,8 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
   const StartScanInputShape = z.object({
     device_id: nullToUndef(z.string()),
     resolution_dpi: nullToUndef(z.number().int()),
-    color_mode: nullToUndef(z.enum(["Color", "Gray", "Lineart"])),
+    // Allow any string; devices may expose Halftone, Binary, Gray16, etc.
+    color_mode: nullToUndef(z.string()),
     source: nullToUndef(z.enum(["Flatbed", "ADF", "ADF Duplex"])),
     duplex: nullToUndef(z.boolean()),
     page_size: nullToUndef(z.enum(["Letter", "A4", "Legal", "Custom"])),
