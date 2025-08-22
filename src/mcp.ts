@@ -1,9 +1,12 @@
+import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import pino from "pino";
 import fs from "fs";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 import { loadConfig } from "./config.js";
 import { listDevices, getDeviceOptions } from "./services/sane.js";
@@ -133,6 +136,52 @@ export async function main() {
   // Connect via stdio
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  logger.error("scan-mcp MCP server listening on stdio");
+
+  const app = express();
+  app.use(express.json());
+
+  // Store transports for each session type
+  const transports = {
+    streamable: {} as Record<string, StreamableHTTPServerTransport>,
+    sse: {} as Record<string, SSEServerTransport>
+  };
+
+  // Modern Streamable HTTP endpoint
+  app.all('/mcp', async (req: express.Request, res: express.Response) => {
+    // Handle Streamable HTTP transport for modern clients
+    // Implementation as shown in the "With Session Management" example
+    // ...
+  });
+
+  // Legacy SSE endpoint for older clients
+  app.get('/sse', async (req: express.Request, res: express.Response) => {
+    // Create SSE transport for legacy clients
+    const transport = new SSEServerTransport('/messages', res);
+    transports.sse[transport.sessionId] = transport;
+    
+    res.on("close", () => {
+      delete transports.sse[transport.sessionId];
+    });
+    
+    await server.connect(transport);
+  });
+
+  // Legacy message endpoint for older clients
+  app.post('/messages', async (req: express.Request, res: express.Response) => {
+    const sessionId = req.query.sessionId as string;
+    const transport = transports.sse[sessionId];
+    if (transport) {
+      await transport.handlePostMessage(req, res, req.body);
+    } else {
+      res.status(400).send('No transport found for sessionId');
+    }
+  });
+
+  app.listen(3000);
+
+  logger.error("scan-mcp MCP server listening on http://localhost:3000");
 }
 
 const isMain = (() => {

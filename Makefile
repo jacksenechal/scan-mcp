@@ -73,10 +73,10 @@ tools:
 verify:
 	$(MAKE) install
 	$(MAKE) typecheck
-        $(MAKE) lint
-        $(MAKE) build
-        $(MAKE) test
-        $(MAKE) tools
+	$(MAKE) lint
+	$(MAKE) build
+	$(MAKE) test
+	$(MAKE) tools
 
 .PHONY: real-scan
 # Example: make real-scan ARGS='{"resolution_dpi":300}'
