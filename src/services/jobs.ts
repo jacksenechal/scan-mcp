@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { execa, type Subprocess } from "execa";
 import { type AppConfig } from "../config.js";
-import { MOCK_PAGE_COUNT, DEFAULT_RESOLUTION_DPI, LETTER_WIDTH_MM, LETTER_HEIGHT_MM, A4_WIDTH_MM, A4_HEIGHT_MM, LEGAL_WIDTH_MM, LEGAL_HEIGHT_MM } from "../constants.js";
+import { DEFAULT_RESOLUTION_DPI, LETTER_WIDTH_MM, LETTER_HEIGHT_MM, A4_WIDTH_MM, A4_HEIGHT_MM, LEGAL_WIDTH_MM, LEGAL_HEIGHT_MM } from "../constants.js";
 import { selectDevice } from "./select.js";
 import { getDeviceOptions } from "./sane.js";
 
@@ -73,7 +73,7 @@ async function initializeJob(input: StartScanInput, config: AppConfig): Promise<
 async function runScan(runDir: string, manifest: Manifest, eventsPath: string, config: AppConfig): Promise<boolean> {
   if (config.SCAN_MOCK) {
     // Create a couple of fake TIFFs to simulate capture
-    const pageCount = MOCK_PAGE_COUNT;
+    const pageCount = 2;
     for (let i = 1; i <= pageCount; i++) {
       const p = path.join(runDir, `page_${String(i).padStart(4, "0")}.tiff`);
       fs.writeFileSync(p, `MOCK_TIFF_PAGE_${i}`);
@@ -88,6 +88,7 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
     let outStream: fs.WriteStream | undefined
     let errStream: fs.WriteStream | undefined
     try {
+      appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_exec", data: { bin: c.bin, args: c.args } });
       // Do not inherit stdio; pipe and persist logs to files to avoid polluting MCP stdout
       const proc = execa(c.bin, c.args, { cwd: runDir, shell: false });
       const outPath = path.join(runDir, "scanner.out.log");
@@ -328,22 +329,60 @@ export async function resolveEffectiveInput(input: StartScanInput, config: AppCo
       if (out.duplex && opts.sources && opts.sources.includes("ADF Duplex")) {
         out.source = "ADF Duplex";
       }
-      if (!out.resolution_dpi && opts.resolutions && opts.resolutions.length) {
-        out.resolution_dpi = opts.resolutions.includes(DEFAULT_RESOLUTION_DPI) ? DEFAULT_RESOLUTION_DPI : opts.resolutions[opts.resolutions.length - 1];
+      if (!out.resolution_dpi) {
+        // First, probe 300dpi explicitly; many devices support it even if not listed
+        if (out.device_id && (await probeResolution(out.device_id, DEFAULT_RESOLUTION_DPI, config))) {
+          out.resolution_dpi = DEFAULT_RESOLUTION_DPI;
+        } else if (opts.resolutions && opts.resolutions.length) {
+          // Prefer DEFAULT_RESOLUTION_DPI when available; otherwise choose the best available <= default;
+          // if none are <= default, choose the closest overall (to avoid huge files by default).
+          if (opts.resolutions.includes(DEFAULT_RESOLUTION_DPI)) {
+            out.resolution_dpi = DEFAULT_RESOLUTION_DPI;
+          } else {
+            const sorted = [...opts.resolutions].sort((a, b) => a - b);
+            const le = sorted.filter((n) => n <= DEFAULT_RESOLUTION_DPI);
+            if (le.length > 0) {
+              out.resolution_dpi = le[le.length - 1];
+            } else {
+              // Pick the closest above default
+              out.resolution_dpi = sorted[0];
+            }
+          }
+        }
       }
       if (!out.color_mode && opts.color_modes && opts.color_modes.length) {
-        const selectedMode = opts.color_modes.includes("Color") ? "Color" : opts.color_modes[0];
+        // Prefer Lineart for documents, then Gray, then Color
+        const modes = opts.color_modes;
+        const selectedMode = modes.includes("Lineart")
+          ? "Lineart"
+          : modes.includes("Gray")
+            ? "Gray"
+            : modes.includes("Color")
+              ? "Color"
+              : (modes[0] as StartScanInput["color_mode"]);
         out.color_mode = selectedMode as StartScanInput["color_mode"];
       }
     } catch {
-      // ignore
+      // If the provided device_id cannot be probed, drop it and fall back to selection
+      out.device_id = undefined;
     }
   }
 
   if (!out.source) out.source = "Flatbed";
   if (!out.resolution_dpi) out.resolution_dpi = DEFAULT_RESOLUTION_DPI;
+  if (!out.color_mode) out.color_mode = "Lineart";
 
   return out;
+}
+
+async function probeResolution(deviceId: string, dpi: number, config: AppConfig): Promise<boolean> {
+  if (config.SCAN_MOCK) return true;
+  try {
+    await execa(config.SCANIMAGE_BIN, ["-n", "-d", deviceId, "--resolution", String(dpi)], { shell: false });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function pageSizeMm(input: StartScanInput): { width: number; height: number } | null {

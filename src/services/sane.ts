@@ -1,6 +1,5 @@
 import { execa } from "execa";
 import { type AppConfig } from "../config.js";
-import { DEFAULT_SANE_RESOLUTIONS } from "../constants.js";
 import pino from "pino";
 
 const logger = pino();
@@ -27,7 +26,7 @@ export async function listDevices(config: AppConfig): Promise<Device[]> {
         vendor: "FUJITSU",
         model: "ScanSnap",
         saneName: "epjitsu0",
-        capabilities: { adf: true, duplex: true, color_modes: ["Color", "Gray"], resolutions: DEFAULT_SANE_RESOLUTIONS },
+        capabilities: { adf: true, duplex: true, color_modes: ["Color", "Gray", "Lineart"], resolutions: [200, 300, 600] },
       },
     ];
   }
@@ -78,7 +77,7 @@ export async function getDeviceOptions(deviceId: string, config: AppConfig): Pro
     return {
       sources: ["Flatbed", "ADF", "ADF Duplex"],
       color_modes: ["Color", "Gray", "Lineart"],
-      resolutions: DEFAULT_SANE_RESOLUTIONS,
+      resolutions: [200, 300, 600],
       adf: true,
       duplex: true,
     };
@@ -88,7 +87,7 @@ export async function getDeviceOptions(deviceId: string, config: AppConfig): Pro
     const { stdout } = await execa(config.SCANIMAGE_BIN, ["-A", "-d", deviceId], { shell: false });
     return parseScanimageOptions(stdout);
   } catch (err) {
-    logger.error(err, "Failed to get device options");
+    logger.error({ err, deviceId }, "Failed to get device options");
     return {};
   }
 }
