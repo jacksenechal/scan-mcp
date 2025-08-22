@@ -10,11 +10,16 @@ Purpose
 Quickstart (development)
 1. Install dev deps:
    - npm install
-2. Run in dev mode (MCP server over stdio):
+2. Run in dev mode (stdio or HTTP):
    - Do not start the server via any `npm run …` command from an MCP client; npm prints a preamble and/or suppresses stdio, which breaks the MCP protocol.
-   - For MCP clients, launch one of these directly:
+   - For MCP clients (stdio), launch one of these directly:
      - `node /absolute/path/to/mcp/scan-mcp/dist/mcp.js`
      - `scan-mcp` (after `npm link`)
+   - For HTTP/Streamable + SSE (development/testing):
+     - `npm run dev:http` (express server with POST `/mcp` and GET `/sse`)
+     - Build + run: `npm run build && npm run start:http`
+     - Streamable HTTP (stateless): POST `http://localhost:3001/mcp`
+     - SSE (stateful): GET `http://localhost:3001/sse` then POST `/messages?sessionId=...`
    - For local development only (not via MCP clients), `npm run dev` is fine in a terminal.
 3. Inspect tools and call via mcptools:
    - mcp tools scan

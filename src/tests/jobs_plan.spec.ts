@@ -24,7 +24,7 @@ describe("command planning", () => {
     expect(cmds[0].args.join(" ")).toContain("--batch=");
   });
 
-  it("uses scanimage only for flatbed", () => {
+  it("uses scanimage for flatbed", () => {
     const cmds = planScanCommands({ source: "Flatbed", device_id: "dev" }, runDir, config);
     expect(cmds).toHaveLength(1);
     expect(cmds[0].bin).toContain("scanimage");

@@ -8,10 +8,12 @@
   "types": "dist/mcp.d.ts",
   "scripts": {
     "dev": "tsx watch src/mcp.ts",
+    "dev:http": "tsx watch src/http-server.ts",
     "build": "tsc -p tsconfig.json",
     "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/mcp.js",
+    "start:http": "node dist/http-server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest --coverage"
