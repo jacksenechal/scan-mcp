@@ -1,4 +1,6 @@
 import express, { type Request, type Response } from "express";
+import { fileURLToPath } from "url";
+import path from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -108,12 +110,18 @@ export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: 
   }
 
   const port = Number(process.env.MCP_HTTP_PORT || 3001);
-  app.listen(port, () => {
+  app.listen(port, "0.0.0.0", () => {
     logger.info({ port, enableStreamable, enableSse }, "scan-mcp HTTP server ready");
   });
 }
 
-// Allow running directly
-if (process.argv[1] && process.argv[1].endsWith("http-server.js")) {
-  startHttpServer();
-}
+// Allow running directly (works for tsx and compiled js)
+const isMain = (() => {
+  try {
+    const thisFile = fileURLToPath(import.meta.url);
+    return path.resolve(process.argv[1] || "") === thisFile;
+  } catch {
+    return false;
+  }
+})();
+if (isMain) startHttpServer();
