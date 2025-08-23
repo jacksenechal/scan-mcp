@@ -4,7 +4,7 @@ import path from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse, Server as HttpServer } from "node:http";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createLogger, maskAuthHeaders } from "./server/logger.js";
 import { loadConfig } from "./config.js";
@@ -12,7 +12,7 @@ import { registerScanServer } from "./server/register.js";
 
 type SseSession = { server: McpServer; transport: SSEServerTransport };
 
-export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: boolean } = {}) {
+export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: boolean } = {}): HttpServer {
   const config = loadConfig();
   const logger = createLogger("http", config.LOG_LEVEL);
   const app = express();
@@ -110,9 +110,10 @@ export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: 
   }
 
   const port = Number(process.env.MCP_HTTP_PORT || 3001);
-  app.listen(port, "0.0.0.0", () => {
+  const server = app.listen(port, "0.0.0.0", () => {
     logger.info({ port, enableStreamable, enableSse }, "scan-mcp HTTP server ready");
   });
+  return server;
 }
 
 // Allow running directly (works for tsx and compiled js)
