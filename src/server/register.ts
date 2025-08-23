@@ -80,10 +80,39 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(config, ListJobsInput.parse(args)) }) }] })
   );
 
+  // Resource mirrors via tools for agents that don't support MCP resources
+  server.tool(
+    "get_manifest",
+    "Fetch a job manifest JSON by job_id",
+    JobIdShape.shape,
+    async (args) => {
+      const jobId = z.string().parse(JobIdShape.parse(args).job_id);
+      const runDir = path.join(path.resolve(config.INBOX_DIR), jobId);
+      const p = path.join(runDir, "manifest.json");
+      const txt = fsSafeRead(p);
+      if (txt) return { content: [{ type: "text", text: txt }] };
+      return { content: [{ type: "text", text: JSON.stringify({ error: "manifest not found" }) }], isError: true };
+    }
+  );
+
+  server.tool(
+    "get_events",
+    "Fetch job events JSONL by job_id",
+    JobIdShape.shape,
+    async (args) => {
+      const jobId = z.string().parse(JobIdShape.parse(args).job_id);
+      const runDir = path.join(path.resolve(config.INBOX_DIR), jobId);
+      const p = path.join(runDir, "events.jsonl");
+      const txt = fsSafeRead(p);
+      if (txt) return { content: [{ type: "text", text: txt }] };
+      return { content: [{ type: "text", text: JSON.stringify({ error: "events not found" }) }], isError: true };
+    }
+  );
+
   // Resources
   const manifestTemplate = new ResourceTemplate("scan://jobs/{job_id}/manifest", { list: undefined });
   server.resource(
-    "/scan/resources/manifest",
+    "manifest",
     manifestTemplate,
     async (_uri, variables) => {
       const jobId = z.string().parse(variables.job_id);
@@ -97,7 +126,7 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
 
   const eventsTemplate = new ResourceTemplate("scan://jobs/{job_id}/events", { list: undefined });
   server.resource(
-    "/scan/resources/events",
+    "events",
     eventsTemplate,
     async (_uri, variables) => {
       const jobId = z.string().parse(variables.job_id);
