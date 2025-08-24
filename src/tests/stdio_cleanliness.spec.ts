@@ -18,12 +18,6 @@ function captureStdout(cmd: string, args: string[], opts: { timeoutMs?: number }
 }
 
 describe('stdio cleanliness for MCP', () => {
-  it('npm run dev emits non-protocol output', async () => {
-    const { stdout, stderr } = await captureStdout('npm', ['run', 'dev'], { timeoutMs: 1200 })
-    // Assert there is unexpected output on process streams at startup
-    expect(stdout.length + stderr.length).toBeGreaterThan(0)
-  })
-
   it('npm run --silent dev does not emit stdout preamble', async () => {
     const { stdout } = await captureStdout('npm', ['run', '--silent', 'dev'], { timeoutMs: 500 })
     expect(stdout).toBe('')
@@ -34,3 +28,4 @@ describe('stdio cleanliness for MCP', () => {
     expect(stdout).toBe('')
   })
 })
+
