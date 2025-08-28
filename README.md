@@ -97,3 +97,49 @@ Notes
 - Implemented page-count document splitting and multipage TIFF assembly (`tiffcp` preferred; fallback copy).
 - Next: map full ADF/duplex/page-size flags, add blank-page/timer doc-break, and improve error/status details.
 - Follow the conventions in docs/CONVENTIONS.md; see docs/BLUEPRINT.md for high-level architecture and flows.
+
+## Scan Defaults and Selection Logic
+
+Here’s how scan-mcp sets its defaults and “smart” choices.
+
+**Core Defaults**
+- Resolution: 300 dpi (probed first; falls back to nearest available, see below).
+- Color mode: Lineart (then Gray → Halftone → Color if Lineart unavailable).
+- Source: Flatbed (only if we can’t infer a better source from device options).
+- Page size: None by default (no `-x/-y` unless you specify `page_size` or `custom_size_mm`).
+- Output: Always batched TIFF pages (`--batch=page_%04d.tiff --format=tiff`).
+
+**Device Selection**
+- Intelligent pick: If you don’t pass `device_id`, we choose one via `selectDevice`:
+  - Excludes: Backends in `SCAN_EXCLUDE_BACKENDS` (default: `["v4l"]`) are scored as unusable.
+  - Feeder preference: Rewards devices with ADF, extra points if duplex-capable.
+  - Resolution match: Small bump if the device supports the desired resolution.
+  - Duplex capability: Extra points for devices with ADF Duplex.
+  - Backend preference: Small bump for backends listed in `SCAN_PREFER_BACKENDS`.
+  - Last used: Slight bump if it matches the last saved device.
+  - Tie-break: Score desc, then `deviceId` lexicographically.
+- If nothing viable (e.g., only excluded devices), we may leave `device_id` unset and rely on the system’s default device.
+
+**Resolution Choice**
+- Target: 300 dpi by default.
+- Probe: Tries a non-scanning probe for 300 (`scanimage -n -d <id> --resolution 300`).
+  - If supported: uses 300.
+  - Otherwise: uses the nearest in the device’s advertised list:
+    - If any ≤ 300: pick the highest ≤ 300.
+    - Else: pick the smallest above 300.
+- In mock mode (`SCAN_MOCK=true`): treats 300 as supported.
+
+**Color Mode Choice**
+- If you pass one: normalized case-insensitively to the device’s available modes.
+- If you don’t: picks from preference order Lineart → Gray → Halftone → Color; else first available.
+
+**ADF/Flatbed/Duplex Logic**
+- If you set `duplex: true` and the device offers “ADF Duplex”: we pick “ADF Duplex”.
+- If you don’t set `source`, but the device reports sources:
+  - Prefer “ADF Duplex”, else “ADF”, else the first reported option.
+- If we still can’t determine a source (e.g., we didn’t identify device options): default to “Flatbed”.
+
+Practical summary
+- Defaults aim for 300dpi, Lineart, and a feeder if available (duplex preferred). If feeder info isn’t available, falls back to Flatbed.
+- Duplex isn’t a separate flag passed to `scanimage`; it’s expressed by selecting the “ADF Duplex” source when available.
+- You can override any of `device_id`, `resolution_dpi`, `color_mode`, `source`, `duplex`, and `page_size`; the server normalizes your inputs against what the device supports.
