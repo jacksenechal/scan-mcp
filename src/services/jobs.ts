@@ -2,12 +2,14 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
-import { execa, type Subprocess } from "execa";
+import { execa, type Subprocess, type ExecaError } from "execa";
 import type { AppContext } from "../context.js";
 import type { AppConfig } from "../config.js";
 import { DEFAULT_RESOLUTION_DPI, LETTER_WIDTH_MM, LETTER_HEIGHT_MM, A4_WIDTH_MM, A4_HEIGHT_MM, LEGAL_WIDTH_MM, LEGAL_HEIGHT_MM } from "../constants.js";
 import { selectDevice } from "./select.js";
 import { getDeviceOptions } from "./sane.js";
+
+import { tailTextFile } from "./file-io.js";
 
 const activeJobs = new Map<string, Subprocess>();
 
@@ -72,6 +74,15 @@ async function initializeJob(input: StartScanInput, ctx: AppContext): Promise<{ 
   return { runDir, manifest, eventsPath };
 }
 
+function isExecaError(e: unknown): e is ExecaError {
+  return typeof e === "object" && e !== null && "shortMessage" in e && "exitCode" in e;
+}
+
+function isNodeError(e: unknown): e is NodeJS.ErrnoException {
+  if (!(e instanceof Error)) return false;
+  return typeof e === "object" && e !== null && "code" in e;
+}
+
 async function runScan(runDir: string, manifest: Manifest, eventsPath: string, ctx: AppContext): Promise<boolean> {
   const { config, logger } = ctx;
   if (config.SCAN_MOCK) {
@@ -86,17 +97,18 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
 
   // Real execution path
   const candidates = planScanCommands(manifest.params, runDir, ctx);
+
   let ran = false; // Initialize ran to false
   for (const c of candidates) {
     let outStream: fs.WriteStream | undefined;
     let errStream: fs.WriteStream | undefined;
+    const outPath = path.join(runDir, "scanner.out.log");
+    const errPath = path.join(runDir, "scanner.err.log");
     try {
-      appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_exec", data: { bin: c.bin, args: c.args } });
-      logger.debug({ cmd: c }, "scanner exec");
+      appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_exec", data: { bin: c.bin, args: c.args, runDir } });
+      logger.debug({ cmd: c, runDir }, "scanner exec");
       // Do not inherit stdio; pipe and persist logs to files to avoid polluting MCP stdout
       const proc = execa(c.bin, c.args, { cwd: runDir, shell: false });
-      const outPath = path.join(runDir, "scanner.out.log");
-      const errPath = path.join(runDir, "scanner.err.log");
       outStream = fs.createWriteStream(outPath, { flags: "a" });
       errStream = fs.createWriteStream(errPath, { flags: "a" });
       proc.stdout?.pipe(outStream);
@@ -106,7 +118,36 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
       ran = true;
       break;
     } catch (err) {
-      appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_primary_failed", data: { bin: c.bin, args: c.args, err: String(err) } });
+      const stderrTail = tailTextFile(errPath, 120);
+      const stdoutTail = tailTextFile(outPath, 60);
+
+      const errorInfo: Record<string, unknown> = {
+        runDir,
+        cmd: c,
+        stderrTail,
+        stdoutTail,
+      };
+
+      if (isExecaError(err)) {
+        errorInfo.kind = "execa";
+        errorInfo.exitCode = err.exitCode;
+        errorInfo.signal = err.signal;
+        errorInfo.shortMessage = err.shortMessage;
+        errorInfo.originalMessage = err.originalMessage;
+      } else if (isNodeError(err)) {
+        errorInfo.kind = "node";
+        errorInfo.code = err.code;
+        errorInfo.errno = err.errno;
+        errorInfo.message = err.message;
+        errorInfo.name = err.name;
+        errorInfo.stack = err.stack;
+      } else {
+        errorInfo.kind = "unknown";
+        errorInfo.error = String(err);
+      }
+
+      appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_failed", data: errorInfo });
+      logger.error(errorInfo, "scanner command failed");
       continue;
     } finally {
       activeJobs.delete(manifest.job_id);
@@ -156,7 +197,17 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
     manifest.state = "error";
     updateManifest(runDir, manifest);
     appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_error", data: { reason: "all candidates failed" } });
-    logger.error({ jobId: manifest.job_id }, "scan job failed");
+
+    const errPath = path.join(runDir, "scanner.err.log");
+    const outPath = path.join(runDir, "scanner.out.log");
+
+    const stderrTail = tailTextFile(errPath, 120);
+    const stdoutTail = tailTextFile(outPath, 40);
+
+    logger.error(
+      { jobId: manifest.job_id, runDir, errLog: errPath, outLog: outPath, stderrTail, stdoutTail },
+      "scan job failed"
+    );
     return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
   }
 
