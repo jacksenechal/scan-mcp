@@ -1,7 +1,7 @@
-import pino from "pino";
+import pino, { type Logger } from "pino";
 import type { IncomingHttpHeaders } from "node:http";
 
-export function createLogger(mode: "stdio" | "http", level: string) {
+export function createLogger(mode: "stdio" | "http", level: string): Logger {
   if (mode === "stdio") {
     // In stdio mode, never write to stdout (protocol channel)
     return pino({ level }, pino.destination({ fd: 2 }));

@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vites
 import fs from "fs";
 import path from "path";
 import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/jobs.js";
-import { type AppConfig } from "../config.js";
+import type { AppConfig } from "../config.js";
+import type { AppContext } from "../context.js";
+import type { Logger } from "pino";
 
 const tmpInboxDir = path.resolve(__dirname, ".tmp-inbox-integration");
 
@@ -24,6 +26,8 @@ describe("integration tests", () => {
     TIFFCP_BIN: "tiffcp",
     IM_CONVERT_BIN: "convert",
   };
+  const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
+  const ctx: AppContext = { config, logger };
 
   beforeAll(() => {
     fs.mkdirSync(tmpInboxDir, { recursive: true });
@@ -44,7 +48,7 @@ describe("integration tests", () => {
   });
 
   it("should complete a full scan job workflow", async () => {
-    const { job_id, run_dir, state } = await startScanJob({}, config);
+    const { job_id, run_dir, state } = await startScanJob({}, ctx);
 
     expect(job_id).toBeDefined();
     expect(run_dir).toBeDefined();
@@ -62,7 +66,7 @@ describe("integration tests", () => {
     expect(manifest.documents.length).toBeGreaterThan(0);
 
     // Verify job status
-    const status = await getJobStatus(job_id, config);
+    const status = await getJobStatus(job_id, ctx);
     expect(status.job_id).toBe(job_id);
     expect(status.state).toBe("completed");
     expect(status.pages).toBe(manifest.pages.length);
@@ -70,23 +74,23 @@ describe("integration tests", () => {
   });
 
   it("should cancel a job and reflect the status", async () => {
-    const { job_id } = await startScanJob({}, config);
+    const { job_id } = await startScanJob({}, ctx);
 
-    const cancelResult = await cancelJob(job_id, config);
+    const cancelResult = await cancelJob(job_id, ctx);
     expect(cancelResult.ok).toBe(true);
 
     await new Promise(resolve => setTimeout(resolve, 100)); // Add a small delay
 
-    const status = await getJobStatus(job_id, config);
+    const status = await getJobStatus(job_id, ctx);
     expect(status.state).toBe("cancelled");
   });
 
   it("should list multiple jobs", async () => {
-    await startScanJob({}, config);
-    await startScanJob({}, config);
-    await startScanJob({}, config);
+    await startScanJob({}, ctx);
+    await startScanJob({}, ctx);
+    await startScanJob({}, ctx);
 
-    const jobs = await listJobs(config, {});
+    const jobs = await listJobs(ctx, {});
     expect(jobs.length).toBeGreaterThanOrEqual(3);
 
     // Verify job states are correct

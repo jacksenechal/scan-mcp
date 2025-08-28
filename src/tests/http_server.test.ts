@@ -31,8 +31,10 @@ describe("http server", () => {
     expect(response.status).toBe(200);
     const text = await response.text();
     const dataLine = text.split("\n").find((l) => l.startsWith("data: "));
-    const body = JSON.parse(dataLine?.slice(6) || "{}");
-    expect(body.result.tools.some((t: any) => t.name === "list_devices")).toBe(true);
+    const body = JSON.parse(dataLine?.slice(6) || "{}") as {
+      result: { tools: { name: string }[] };
+    };
+    expect(body.result.tools.some((t) => t.name === "list_devices")).toBe(true);
   });
 
   it("rejects GET on /mcp", async () => {

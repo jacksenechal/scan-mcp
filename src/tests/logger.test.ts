@@ -1,13 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import pino from "pino";
 import { createLogger, maskAuthHeaders } from "../server/logger.js";
+import type { IncomingHttpHeaders } from "node:http";
 
 describe("logger utilities", () => {
   it("masks authorization and api key headers", () => {
-    const headers = {
+    const headers: IncomingHttpHeaders = {
       authorization: "Bearer abcdefghijkl", // 12 chars -> last 4 kept
       "x-api-key": "short",
-    } as any;
+    };
     const masked = maskAuthHeaders(headers);
     expect(masked.authorization).toBe("Bearer ***ijkl");
     expect(masked["x-api-key"]).toBe("***");

@@ -9,12 +9,14 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createLogger, maskAuthHeaders } from "./server/logger.js";
 import { loadConfig } from "./config.js";
 import { registerScanServer } from "./server/register.js";
+import type { AppContext } from "./context.js";
 
 type SseSession = { server: McpServer; transport: SSEServerTransport };
 
 export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: boolean } = {}): HttpServer {
   const config = loadConfig();
   const logger = createLogger("http", config.LOG_LEVEL);
+  const ctx: AppContext = { config, logger };
   const app = express();
   app.use(express.json({ limit: "4mb" }));
 
@@ -54,7 +56,7 @@ export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: 
     app.post("/mcp", async (req: Request, res: Response) => {
       try {
         const server = new McpServer({ name: "scan-mcp", version: "0.1.0" }, { capabilities: { tools: {}, resources: {} } });
-        registerScanServer(server, config);
+        registerScanServer(server, ctx);
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         res.on("close", () => { transport.close().catch(() => {}); });
         await server.connect(transport);
@@ -83,7 +85,7 @@ export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: 
   if (enableSse) {
     app.get("/sse", async (_req: Request, res: Response) => {
       const server = new McpServer({ name: "scan-mcp", version: "0.1.0" }, { capabilities: { tools: {}, resources: {} } });
-      registerScanServer(server, config);
+      registerScanServer(server, ctx);
       const transport = new SSEServerTransport("/messages", res as unknown as ServerResponse);
       sseSessions[transport.sessionId] = { server, transport };
       res.on("close", () => { delete sseSessions[transport.sessionId]; });
