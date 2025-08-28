@@ -3,7 +3,8 @@ import path from "path";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { execa, type Subprocess } from "execa";
-import { type AppConfig } from "../config.js";
+import type { AppContext } from "../context.js";
+import type { AppConfig } from "../config.js";
 import { DEFAULT_RESOLUTION_DPI, LETTER_WIDTH_MM, LETTER_HEIGHT_MM, A4_WIDTH_MM, A4_HEIGHT_MM, LEGAL_WIDTH_MM, LEGAL_HEIGHT_MM } from "../constants.js";
 import { selectDevice } from "./select.js";
 import { getDeviceOptions } from "./sane.js";
@@ -46,10 +47,10 @@ type Manifest = {
   state: "running" | "completed" | "cancelled" | "error";
 };
 
-async function initializeJob(input: StartScanInput, config: AppConfig): Promise<{ runDir: string, manifest: Manifest, eventsPath: string }> {
-  const effective = await resolveEffectiveInput(input, config);
+async function initializeJob(input: StartScanInput, ctx: AppContext): Promise<{ runDir: string; manifest: Manifest; eventsPath: string }> {
+  const effective = await resolveEffectiveInput(input, ctx);
   const id = `job-${uuidv4()}`;
-  const baseDir = effective.tmp_dir ? path.resolve(effective.tmp_dir) : path.resolve(config.INBOX_DIR);
+  const baseDir = effective.tmp_dir ? path.resolve(effective.tmp_dir) : path.resolve(ctx.config.INBOX_DIR);
   const runDir = path.join(baseDir, id);
   fs.mkdirSync(runDir, { recursive: true });
 
@@ -71,7 +72,8 @@ async function initializeJob(input: StartScanInput, config: AppConfig): Promise<
   return { runDir, manifest, eventsPath };
 }
 
-async function runScan(runDir: string, manifest: Manifest, eventsPath: string, config: AppConfig): Promise<boolean> {
+async function runScan(runDir: string, manifest: Manifest, eventsPath: string, ctx: AppContext): Promise<boolean> {
+  const { config, logger } = ctx;
   if (config.SCAN_MOCK) {
     // Create a couple of fake TIFFs to simulate capture
     const pageCount = 2;
@@ -83,13 +85,14 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
   }
 
   // Real execution path
-  const candidates = planScanCommands(manifest.params, runDir, config);
+  const candidates = planScanCommands(manifest.params, runDir, ctx);
   let ran = false; // Initialize ran to false
   for (const c of candidates) {
-    let outStream: fs.WriteStream | undefined
-    let errStream: fs.WriteStream | undefined
+    let outStream: fs.WriteStream | undefined;
+    let errStream: fs.WriteStream | undefined;
     try {
       appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_exec", data: { bin: c.bin, args: c.args } });
+      logger.debug({ cmd: c }, "scanner exec");
       // Do not inherit stdio; pipe and persist logs to files to avoid polluting MCP stdout
       const proc = execa(c.bin, c.args, { cwd: runDir, shell: false });
       const outPath = path.join(runDir, "scanner.out.log");
@@ -114,7 +117,8 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
   return ran; // Return ran
 }
 
-async function processPages(runDir: string, manifest: Manifest, config: AppConfig) {
+async function processPages(runDir: string, manifest: Manifest, ctx: AppContext) {
+    const { config } = ctx;
     const pages = fs
         .readdirSync(runDir)
         .filter((f) => f.startsWith("page_") && f.endsWith(".tiff"))
@@ -141,30 +145,34 @@ function updateManifest(runDir: string, manifest: Manifest) {
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
-export async function startScanJob(input: StartScanInput, config: AppConfig): Promise<StartScanResult> {
-  const { runDir, manifest, eventsPath } = await initializeJob(input, config);
+export async function startScanJob(input: StartScanInput, ctx: AppContext): Promise<StartScanResult> {
+  const { logger } = ctx;
+  logger.debug({ input }, "start scan job");
+  const { runDir, manifest, eventsPath } = await initializeJob(input, ctx);
 
-  const scanSuccessful = await runScan(runDir, manifest, eventsPath, config);
+  const scanSuccessful = await runScan(runDir, manifest, eventsPath, ctx);
 
   if (!scanSuccessful) {
     manifest.state = "error";
     updateManifest(runDir, manifest);
     appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_error", data: { reason: "all candidates failed" } });
+    logger.error({ jobId: manifest.job_id }, "scan job failed");
     return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
   }
 
-  await processPages(runDir, manifest, config);
+  await processPages(runDir, manifest, ctx);
 
   manifest.state = "completed";
   updateManifest(runDir, manifest);
   appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_completed" });
-  if (manifest.device_id) saveLastUsedDevice(manifest.device_id, config);
+  if (manifest.device_id) saveLastUsedDevice(manifest.device_id, ctx.config);
+  logger.debug({ jobId: manifest.job_id }, "scan job completed");
 
   return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
 }
 
-export async function getJobStatus(jobId: string, config: AppConfig, baseDir?: string) {
-  const runDir = path.join(path.resolve(baseDir ?? config.INBOX_DIR), jobId);
+export async function getJobStatus(jobId: string, ctx: AppContext, baseDir?: string) {
+  const runDir = path.join(path.resolve(baseDir ?? ctx.config.INBOX_DIR), jobId);
   const manifestPath = path.join(runDir, "manifest.json");
   if (!fs.existsSync(manifestPath)) return { job_id: jobId, state: "unknown", error: "manifest not found" } as const;
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
@@ -177,8 +185,9 @@ export async function getJobStatus(jobId: string, config: AppConfig, baseDir?: s
   };
 }
 
-export async function cancelJob(jobId: string, config: AppConfig, baseDir?: string) {
-  const runDir = path.join(path.resolve(baseDir ?? config.INBOX_DIR), jobId);
+export async function cancelJob(jobId: string, ctx: AppContext, baseDir?: string) {
+  const { logger } = ctx;
+  const runDir = path.join(path.resolve(baseDir ?? ctx.config.INBOX_DIR), jobId);
 
   // Terminate the running process, if it exists
   if (activeJobs.has(jobId)) {
@@ -193,6 +202,7 @@ export async function cancelJob(jobId: string, config: AppConfig, baseDir?: stri
   manifest.state = "cancelled";
   fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
   appendEvent(path.join(runDir, "events.jsonl"), { ts: new Date().toISOString(), type: "job_cancelled" });
+  logger.debug({ jobId }, "scan job cancelled");
   return { ok: true } as const;
 }
 
@@ -205,8 +215,8 @@ export type JobInfo = {
   documents?: number;
 };
 
-export async function listJobs(config: AppConfig, { limit, state }: { limit?: number; state?: string } = {}): Promise<JobInfo[]> {
-  const base = path.resolve(config.INBOX_DIR);
+export async function listJobs(ctx: AppContext, { limit, state }: { limit?: number; state?: string } = {}): Promise<JobInfo[]> {
+  const base = path.resolve(ctx.config.INBOX_DIR);
   if (!fs.existsSync(base)) return [];
   const entries = fs
     .readdirSync(base, { withFileTypes: true })
@@ -254,10 +264,10 @@ function appendEvent(eventsPath: string, evt: Record<string, unknown>) {
   fs.appendFileSync(eventsPath, JSON.stringify(evt) + "\n");
 }
 
-export function planScanCommands(input: StartScanInput, runDir: string, config: AppConfig): { bin: string; args: string[] }[] {
+export function planScanCommands(input: StartScanInput, runDir: string, ctx: AppContext): { bin: string; args: string[] }[] {
   const batchPattern = path.join(runDir, "page_%04d.tiff");
   const baseArgs = buildCommonArgs(input, batchPattern);
-  return [{ bin: config.SCANIMAGE_BIN, args: baseArgs }];
+  return [{ bin: ctx.config.SCANIMAGE_BIN, args: baseArgs }];
 }
 
 function buildCommonArgs(input: StartScanInput, batchPattern: string): string[] {
@@ -307,17 +317,22 @@ async function assembleTiff(inputFiles: string[], outPath: string, config: AppCo
   }
 }
 
-export async function resolveEffectiveInput(input: StartScanInput, config: AppConfig): Promise<StartScanInput> {
+export async function resolveEffectiveInput(input: StartScanInput, ctx: AppContext): Promise<StartScanInput> {
+  const { config } = ctx;
   const out: StartScanInput = { ...input };
 
   if (!out.device_id) {
-    const sel = await selectDevice({ desiredSource: out.source, desiredResolutionDpi: out.resolution_dpi }, config, loadLastUsedDevice(config) || undefined);
+    const sel = await selectDevice(
+      { desiredSource: out.source, desiredResolutionDpi: out.resolution_dpi },
+      ctx,
+      loadLastUsedDevice(config) || undefined
+    );
     if (sel) out.device_id = sel.deviceId;
   }
 
   if (out.device_id) {
     try {
-      const opts = await getDeviceOptions(out.device_id, config);
+      const opts = await getDeviceOptions(out.device_id, ctx);
       if (!out.source && opts.sources && opts.sources.length) {
         const selected = opts.sources.includes("ADF Duplex")
           ? "ADF Duplex"

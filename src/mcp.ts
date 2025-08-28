@@ -5,17 +5,19 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config.js";
 import { registerScanServer } from "./server/register.js";
+import type { AppContext } from "./context.js";
 
 const config = loadConfig();
 // Send logs to stderr to keep stdout clean for MCP protocol
 const logger = createLogger("stdio", config.LOG_LEVEL);
+const ctx: AppContext = { config, logger };
 
 export async function main() {
   const server = new McpServer(
     { name: "scan-mcp", version: "0.1.0" },
     { capabilities: { tools: {}, resources: {} } }
   );
-  registerScanServer(server, config);
+  registerScanServer(server, ctx);
 
   // Connect via stdio
   const transport = new StdioServerTransport();

@@ -1,4 +1,4 @@
-import { type AppConfig } from "../config.js";
+import type { AppContext } from "../context.js";
 import { listDevices, getDeviceOptions, type DeviceOptions } from "./sane.js";
 
 export type SelectionInput = {
@@ -14,10 +14,11 @@ export type SelectionResult = {
 
 export async function selectDevice(
   desired: SelectionInput,
-  config: AppConfig,
+  ctx: AppContext,
   lastUsedId?: string
 ): Promise<SelectionResult | null> {
-  const devices = await listDevices(config);
+  const { config } = ctx;
+  const devices = await listDevices(ctx);
   if (devices.length === 0) return null;
 
   const results: SelectionResult[] = [];
@@ -31,7 +32,7 @@ export async function selectDevice(
     let score = 0;
     const rationale: string[] = [];
     try {
-      const opts: DeviceOptions = await getDeviceOptions(d.id, config);
+      const opts: DeviceOptions = await getDeviceOptions(d.id, ctx);
       const sources = opts.sources ?? [];
       const resolutions = opts.resolutions ?? [];
       const hasAdfDuplex = sources.includes("ADF Duplex");

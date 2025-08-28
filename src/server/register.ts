@@ -2,17 +2,17 @@ import fs from "fs";
 import path from "path";
 import { z } from "zod";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { AppConfig } from "../config.js";
+import type { AppContext } from "../context.js";
 import { listDevices, getDeviceOptions } from "../services/sane.js";
 import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/jobs.js";
 
-export function registerScanServer(server: McpServer, config: AppConfig) {
+export function registerScanServer(server: McpServer, ctx: AppContext) {
   // Tools
   // No input schema so clients may omit params entirely
   server.tool(
     "list_devices",
     "List connected scanner devices with basic capabilities",
-    async () => ({ content: [{ type: "text", text: JSON.stringify({ devices: await listDevices(config) }) }] })
+    async () => ({ content: [{ type: "text", text: JSON.stringify({ devices: await listDevices(ctx) }) }] })
   );
 
   const GetDeviceOptionsShape = z.object({ device_id: z.string() });
@@ -20,7 +20,7 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     "get_device_options",
     "Get SANE options for a specific device (sources, resolutions, modes)",
     GetDeviceOptionsShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions(GetDeviceOptionsShape.parse(args).device_id, config)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions(GetDeviceOptionsShape.parse(args).device_id, ctx)) }] })
   );
 
   const nullToUndef = <T extends z.ZodTypeAny>(schema: T) => z.preprocess((v) => (v === null ? undefined : v), schema.optional());
@@ -51,7 +51,7 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     "start_scan_job",
     "Start a scan job; auto-selects device and fills defaults when omitted",
     StartScanInputShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await startScanJob(StartScanInputShape.parse(args), config)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await startScanJob(StartScanInputShape.parse(args), ctx)) }] })
   );
 
   const JobIdShape = z.object({ job_id: z.string() });
@@ -59,14 +59,14 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     "get_job_status",
     "Get status and artifact counts for a job",
     JobIdShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getJobStatus(JobIdShape.parse(args).job_id, config)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getJobStatus(JobIdShape.parse(args).job_id, ctx)) }] })
   );
 
   server.tool(
     "cancel_job",
     "Cancel a running scan job",
     JobIdShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob(JobIdShape.parse(args).job_id, config)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob(JobIdShape.parse(args).job_id, ctx)) }] })
   );
 
   const ListJobsInput = z.object({
@@ -77,7 +77,7 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     "list_jobs",
     "List recent scan jobs from the inbox directory",
     ListJobsInput.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(config, ListJobsInput.parse(args)) }) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(ctx, ListJobsInput.parse(args)) }) }] })
   );
 
   // Resource mirrors via tools for agents that don't support MCP resources
@@ -87,7 +87,7 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     JobIdShape.shape,
     async (args) => {
       const jobId = z.string().parse(JobIdShape.parse(args).job_id);
-      const runDir = path.join(path.resolve(config.INBOX_DIR), jobId);
+      const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
       const p = path.join(runDir, "manifest.json");
       const txt = fsSafeRead(p);
       if (txt) return { content: [{ type: "text", text: txt }] };
@@ -101,7 +101,7 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     JobIdShape.shape,
     async (args) => {
       const jobId = z.string().parse(JobIdShape.parse(args).job_id);
-      const runDir = path.join(path.resolve(config.INBOX_DIR), jobId);
+      const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
       const p = path.join(runDir, "events.jsonl");
       const txt = fsSafeRead(p);
       if (txt) return { content: [{ type: "text", text: txt }] };
@@ -116,7 +116,7 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     manifestTemplate,
     async (_uri, variables) => {
       const jobId = z.string().parse(variables.job_id);
-      const runDir = path.join(path.resolve(config.INBOX_DIR), jobId);
+      const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
       const p = path.join(runDir, "manifest.json");
       const txt = fsSafeRead(p);
       if (txt) return { contents: [{ uri: `file://${p}`, text: txt }] };
@@ -130,7 +130,7 @@ export function registerScanServer(server: McpServer, config: AppConfig) {
     eventsTemplate,
     async (_uri, variables) => {
       const jobId = z.string().parse(variables.job_id);
-      const runDir = path.join(path.resolve(config.INBOX_DIR), jobId);
+      const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
       const p = path.join(runDir, "events.jsonl");
       const txt = fsSafeRead(p);
       if (txt) return { contents: [{ uri: `file://${p}`, text: txt }] };

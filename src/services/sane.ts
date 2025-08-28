@@ -1,8 +1,5 @@
 import { execa } from "execa";
-import { type AppConfig } from "../config.js";
-import pino from "pino";
-
-const logger = pino();
+import type { AppContext } from "../context.js";
 
 export type Device = {
   id: string;
@@ -18,7 +15,8 @@ export type Device = {
   };
 };
 
-export async function listDevices(config: AppConfig): Promise<Device[]> {
+export async function listDevices(ctx: AppContext): Promise<Device[]> {
+  const { config, logger } = ctx;
   if (config.SCAN_MOCK) {
     return [
       {
@@ -41,7 +39,7 @@ export async function listDevices(config: AppConfig): Promise<Device[]> {
     });
     return filtered;
   } catch (err) {
-    logger.error(err, "Failed to list devices");
+    logger.error({ err }, "Failed to list devices");
     return [];
   }
 }
@@ -72,7 +70,8 @@ export type DeviceOptions = {
   duplex?: boolean;
 };
 
-export async function getDeviceOptions(deviceId: string, config: AppConfig): Promise<DeviceOptions> {
+export async function getDeviceOptions(deviceId: string, ctx: AppContext): Promise<DeviceOptions> {
+  const { config, logger } = ctx;
   if (config.SCAN_MOCK) {
     return {
       sources: ["Flatbed", "ADF", "ADF Duplex"],
