@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 import { z } from "zod";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppContext } from "../context.js";
@@ -7,6 +8,14 @@ import { listDevices, getDeviceOptions } from "../services/sane.js";
 import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/jobs.js";
 
 export function registerScanServer(server: McpServer, ctx: AppContext) {
+  const currentDir = path.dirname(fileURLToPath(import.meta.url));
+  const orientationPath = path.resolve(currentDir, "../../ORIENTATION.md");
+  const orientationUri = "mcp://scan-mcp/orientation";
+  const orientationText = fs.readFileSync(orientationPath, "utf8");
+  const orientationLastModified = fs.statSync(orientationPath).mtime.toISOString();
+  const orientationSummary =
+    "scan-mcp discovers scanners and starts jobs (300dpi lineart via ADF duplex by default); inspect results via manifest and events.";
+
   // Tools
   // No input schema so clients may omit params entirely
   server.tool(
@@ -109,7 +118,63 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     }
   );
 
+  server.tool(
+    "start_here",
+    "Compatibility fallback: returns orientation URI; prefer resources and prompts",
+    async () => ({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ orientation_uri: orientationUri, summary: orientationSummary }),
+        },
+      ],
+    })
+  );
+
+  server.prompt(
+    "bootstrap_context",
+    "Initialize Context",
+    async () => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: "Read the attached resources, then confirm readiness.",
+          },
+        },
+        {
+          role: "assistant",
+          content: {
+            type: "resource",
+            resource: { uri: orientationUri, mimeType: "text/markdown", text: "" },
+          },
+        },
+      ],
+    })
+  );
+
   // Resources
+  server.resource(
+    "orientation",
+    orientationUri,
+    {
+      title: "scan-mcp Orientation",
+      mimeType: "text/markdown",
+      text: orientationText,
+      annotations: {
+        audience: ["assistant"],
+        priority: 1.0,
+        lastModified: orientationLastModified,
+      },
+    },
+    async () => ({
+      contents: [
+        { uri: orientationUri, mimeType: "text/markdown", text: orientationText },
+      ],
+    })
+  );
+
   const manifestTemplate = new ResourceTemplate("scan://jobs/{job_id}/manifest", { list: undefined });
   server.resource(
     "manifest",

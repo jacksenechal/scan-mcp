@@ -26,6 +26,8 @@ describe("registerScanServer", () => {
     const internal = server as unknown as {
       _registeredTools: Record<string, unknown>;
       _registeredResourceTemplates: Record<string, unknown>;
+      _registeredResources: Record<string, unknown>;
+      _registeredPrompts: Record<string, unknown>;
     };
     const tools = Object.keys(internal._registeredTools);
     expect(tools).toEqual(
@@ -38,10 +40,17 @@ describe("registerScanServer", () => {
         "list_jobs",
         "get_manifest",
         "get_events",
+        "start_here",
       ])
     );
     const resources = Object.keys(internal._registeredResourceTemplates);
     expect(resources).toEqual(expect.arrayContaining(["manifest", "events"]));
+    const staticResources = Object.keys(internal._registeredResources);
+    expect(staticResources).toEqual(
+      expect.arrayContaining(["mcp://scan-mcp/orientation"])
+    );
+    const prompts = Object.keys(internal._registeredPrompts);
+    expect(prompts).toEqual(expect.arrayContaining(["bootstrap_context"]));
   });
 
   it("get_manifest reports missing file as error", async () => {

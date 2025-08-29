@@ -15,7 +15,15 @@ const ctx: AppContext = { config, logger };
 export async function main() {
   const server = new McpServer(
     { name: "scan-mcp", version: "0.1.0" },
-    { capabilities: { tools: {}, resources: {} } }
+    {
+      capabilities: {
+        resources: { listChanged: true },
+        prompts: { listChanged: true },
+        tools: { listChanged: true },
+      },
+      instructions:
+        "On first use, read resource uri 'mcp://scan-mcp/orientation' for capabilities and defaults.",
+    }
   );
   registerScanServer(server, ctx);
 
