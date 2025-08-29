@@ -4,6 +4,7 @@ import { registerScanServer } from "../server/register.js";
 import type { AppConfig } from "../config.js";
 import type { AppContext } from "../context.js";
 import type { Logger } from "pino";
+import { version } from "../mcp.js";
 
 const baseConfig: AppConfig = {
   SCAN_MOCK: true,
@@ -21,7 +22,7 @@ const ctx: AppContext = { config: baseConfig, logger };
 
 describe("registerScanServer", () => {
   it("registers expected tools and resources", () => {
-    const server = new McpServer({ name: "scan-mcp", version: "0.1.0" }, { capabilities: { tools: {}, resources: {} } });
+    const server = new McpServer({ name: "scan-mcp", version }, { capabilities: { tools: {}, resources: {} } });
     registerScanServer(server, ctx);
     const internal = server as unknown as {
       _registeredTools: Record<string, unknown>;
@@ -45,7 +46,7 @@ describe("registerScanServer", () => {
   });
 
   it("get_manifest reports missing file as error", async () => {
-    const server = new McpServer({ name: "scan-mcp", version: "0.1.0" }, { capabilities: { tools: {}, resources: {} } });
+    const server = new McpServer({ name: "scan-mcp", version }, { capabilities: { tools: {}, resources: {} } });
     registerScanServer(server, ctx);
     const internal = server as unknown as {
       _registeredTools: Record<string, { callback: (args: unknown) => Promise<{ isError?: boolean; content: { type: string }[] }> }>;
