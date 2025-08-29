@@ -5,6 +5,7 @@ import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mc
 import type { AppContext } from "../context.js";
 import { listDevices, getDeviceOptions } from "../services/sane.js";
 import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/jobs.js";
+import { resolveJobPath } from "../services/utils.js";
 
 export function registerScanServer(server: McpServer, ctx: AppContext) {
   // Tools
@@ -87,7 +88,7 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     JobIdShape.shape,
     async (args) => {
       const jobId = z.string().parse(JobIdShape.parse(args).job_id);
-      const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
+      const runDir = resolveJobPath(jobId, ctx.config.INBOX_DIR);
       const p = path.join(runDir, "manifest.json");
       const txt = fsSafeRead(p);
       if (txt) return { content: [{ type: "text", text: txt }] };
@@ -101,7 +102,7 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     JobIdShape.shape,
     async (args) => {
       const jobId = z.string().parse(JobIdShape.parse(args).job_id);
-      const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
+      const runDir = resolveJobPath(jobId, ctx.config.INBOX_DIR);
       const p = path.join(runDir, "events.jsonl");
       const txt = fsSafeRead(p);
       if (txt) return { content: [{ type: "text", text: txt }] };
@@ -116,7 +117,7 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     manifestTemplate,
     async (_uri, variables) => {
       const jobId = z.string().parse(variables.job_id);
-      const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
+      const runDir = resolveJobPath(jobId, ctx.config.INBOX_DIR);
       const p = path.join(runDir, "manifest.json");
       const txt = fsSafeRead(p);
       if (txt) return { contents: [{ uri: `file://${p}`, text: txt }] };
@@ -124,13 +125,13 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     }
   );
 
-  const eventsTemplate = new ResourceTemplate("scan://jobs/{job_id}/events", { list: undefined });
+const eventsTemplate = new ResourceTemplate("scan://jobs/{job_id}/events", { list: undefined });
   server.resource(
     "events",
     eventsTemplate,
     async (_uri, variables) => {
       const jobId = z.string().parse(variables.job_id);
-      const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
+      const runDir = resolveJobPath(jobId, ctx.config.INBOX_DIR);
       const p = path.join(runDir, "events.jsonl");
       const txt = fsSafeRead(p);
       if (txt) return { contents: [{ uri: `file://${p}`, text: txt }] };
