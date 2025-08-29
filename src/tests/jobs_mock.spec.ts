@@ -1,4 +1,4 @@
-import fs from "fs";
+import { promises as fs } from "fs";
 import path from "path";
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { startScanJob, getJobStatus, cancelJob } from "../services/jobs.js";
@@ -21,13 +21,13 @@ const config: AppConfig = {
 const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
 const ctx: AppContext = { config, logger };
 
-beforeAll(() => {
-  fs.mkdirSync(tmpRoot, { recursive: true });
+beforeAll(async () => {
+  await fs.mkdir(tmpRoot, { recursive: true });
 });
 
-afterAll(() => {
+afterAll(async () => {
   try {
-    fs.rmSync(tmpRoot, { recursive: true, force: true });
+    await fs.rm(tmpRoot, { recursive: true, force: true });
   } catch {}
 });
 
@@ -36,12 +36,12 @@ describe("startScanJob (mock)", () => {
     const res = await startScanJob({ tmp_dir: tmpRoot }, ctx);
     expect(res.job_id).toMatch(/^job-/);
 
-    expect(fs.existsSync(res.run_dir)).toBe(true);
+    await fs.access(res.run_dir);
     const manifestPath = path.join(res.run_dir, "manifest.json");
     const eventsPath = path.join(res.run_dir, "events.jsonl");
-    expect(fs.existsSync(manifestPath)).toBe(true);
-    expect(fs.existsSync(eventsPath)).toBe(true);
-    const files = fs.readdirSync(res.run_dir);
+    await fs.access(manifestPath);
+    await fs.access(eventsPath);
+    const files = await fs.readdir(res.run_dir);
     expect(files.some((f) => f.startsWith("page_") && f.endsWith(".tiff"))).toBe(true);
     expect(files.some((f) => f.startsWith("doc_") && f.endsWith(".tiff"))).toBe(true);
 

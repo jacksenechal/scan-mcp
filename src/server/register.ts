@@ -1,4 +1,4 @@
-import fs from "fs";
+import { promises as fs } from "fs";
 import path from "path";
 import { z } from "zod";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -89,7 +89,7 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
       const jobId = z.string().parse(JobIdShape.parse(args).job_id);
       const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
       const p = path.join(runDir, "manifest.json");
-      const txt = fsSafeRead(p);
+      const txt = await fsSafeRead(p);
       if (txt) return { content: [{ type: "text", text: txt }] };
       return { content: [{ type: "text", text: JSON.stringify({ error: "manifest not found" }) }], isError: true };
     }
@@ -103,7 +103,7 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
       const jobId = z.string().parse(JobIdShape.parse(args).job_id);
       const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
       const p = path.join(runDir, "events.jsonl");
-      const txt = fsSafeRead(p);
+      const txt = await fsSafeRead(p);
       if (txt) return { content: [{ type: "text", text: txt }] };
       return { content: [{ type: "text", text: JSON.stringify({ error: "events not found" }) }], isError: true };
     }
@@ -118,7 +118,7 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
       const jobId = z.string().parse(variables.job_id);
       const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
       const p = path.join(runDir, "manifest.json");
-      const txt = fsSafeRead(p);
+      const txt = await fsSafeRead(p);
       if (txt) return { contents: [{ uri: `file://${p}`, text: txt }] };
       return { contents: [], isError: true };
     }
@@ -132,16 +132,16 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
       const jobId = z.string().parse(variables.job_id);
       const runDir = path.join(path.resolve(ctx.config.INBOX_DIR), jobId);
       const p = path.join(runDir, "events.jsonl");
-      const txt = fsSafeRead(p);
+      const txt = await fsSafeRead(p);
       if (txt) return { contents: [{ uri: `file://${p}`, text: txt }] };
       return { contents: [], isError: true };
     }
   );
 }
 
-function fsSafeRead(p: string): string | null {
+async function fsSafeRead(p: string): Promise<string | null> {
   try {
-    return fs.readFileSync(p, "utf8");
+    return await fs.readFile(p, "utf8");
   } catch {
     return null;
   }

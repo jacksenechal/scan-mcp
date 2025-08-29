@@ -1,4 +1,4 @@
-import fs from "fs";
+import { promises as fs, createWriteStream, type WriteStream } from "fs";
 import path from "path";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
@@ -54,7 +54,7 @@ async function initializeJob(input: StartScanInput, ctx: AppContext): Promise<{ 
   const id = `job-${uuidv4()}`;
   const baseDir = effective.tmp_dir ? path.resolve(effective.tmp_dir) : path.resolve(ctx.config.INBOX_DIR);
   const runDir = path.join(baseDir, id);
-  fs.mkdirSync(runDir, { recursive: true });
+  await fs.mkdir(runDir, { recursive: true });
 
   const eventsPath = path.join(runDir, "events.jsonl");
   const now = new Date().toISOString();
@@ -69,7 +69,7 @@ async function initializeJob(input: StartScanInput, ctx: AppContext): Promise<{ 
     state: "running" as const,
   };
 
-  appendEvent(eventsPath, { ts: now, type: "job_started", data: { input: effective } });
+  await appendEvent(eventsPath, { ts: now, type: "job_started", data: { input: effective } });
 
   return { runDir, manifest, eventsPath };
 }
@@ -90,7 +90,7 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
     const pageCount = 2;
     for (let i = 1; i <= pageCount; i++) {
       const p = path.join(runDir, `page_${String(i).padStart(4, "0")}.tiff`);
-      fs.writeFileSync(p, `MOCK_TIFF_PAGE_${i}`);
+      await fs.writeFile(p, `MOCK_TIFF_PAGE_${i}`);
     }
     return true;
   }
@@ -100,17 +100,17 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
 
   let ran = false; // Initialize ran to false
   for (const c of candidates) {
-    let outStream: fs.WriteStream | undefined;
-    let errStream: fs.WriteStream | undefined;
+    let outStream: WriteStream | undefined;
+    let errStream: WriteStream | undefined;
     const outPath = path.join(runDir, "scanner.out.log");
     const errPath = path.join(runDir, "scanner.err.log");
     try {
-      appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_exec", data: { bin: c.bin, args: c.args, runDir } });
+      await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_exec", data: { bin: c.bin, args: c.args, runDir } });
       logger.debug({ cmd: c, runDir }, "scanner exec");
       // Do not inherit stdio; pipe and persist logs to files to avoid polluting MCP stdout
       const proc = execa(c.bin, c.args, { cwd: runDir, shell: false });
-      outStream = fs.createWriteStream(outPath, { flags: "a" });
-      errStream = fs.createWriteStream(errPath, { flags: "a" });
+      outStream = createWriteStream(outPath, { flags: "a" });
+      errStream = createWriteStream(errPath, { flags: "a" });
       proc.stdout?.pipe(outStream);
       proc.stderr?.pipe(errStream);
       activeJobs.set(manifest.job_id, proc);
@@ -118,8 +118,8 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
       ran = true;
       break;
     } catch (err) {
-      const stderrTail = tailTextFile(errPath, 120);
-      const stdoutTail = tailTextFile(outPath, 60);
+      const stderrTail = await tailTextFile(errPath, 120);
+      const stdoutTail = await tailTextFile(outPath, 60);
 
       const errorInfo: Record<string, unknown> = {
         runDir,
@@ -146,7 +146,7 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
         errorInfo.error = String(err);
       }
 
-      appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_failed", data: errorInfo });
+      await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_failed", data: errorInfo });
       logger.error(errorInfo, "scanner command failed");
       continue;
     } finally {
@@ -159,31 +159,29 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
 }
 
 async function processPages(runDir: string, manifest: Manifest, ctx: AppContext) {
-    const { config } = ctx;
-    const pages = fs
-        .readdirSync(runDir)
-        .filter((f) => f.startsWith("page_") && f.endsWith(".tiff"))
-        .sort()
-        .map((f, idx) => {
-            const p = path.join(runDir, f);
-            return { index: idx + 1, path: p, sha256: hashFile(p) };
-        });
-    manifest.pages.push(...pages);
+  const { config } = ctx;
+  const entries = await fs.readdir(runDir);
+  const pageFiles = entries.filter((f) => f.startsWith("page_") && f.endsWith(".tiff")).sort();
+  for (let idx = 0; idx < pageFiles.length; idx++) {
+    const f = pageFiles[idx];
+    const p = path.join(runDir, f);
+    manifest.pages.push({ index: idx + 1, path: p, sha256: await hashFile(p) });
+  }
 
-    const segments = segmentPages(pages.map((p) => p.index), manifest.params.doc_break_policy);
-    let docIdx = 1;
-    for (const seg of segments) {
-        const outDoc = path.join(runDir, `doc_${String(docIdx).padStart(4, "0")}.tiff`);
-        const segFiles = seg.map((i) => pages[i - 1]?.path).filter(Boolean) as string[];
-        await assembleTiff(segFiles, outDoc, config);
-        manifest.documents.push({ index: docIdx, pages: seg, path: outDoc, sha256: hashFile(outDoc) });
-        docIdx++;
-    }
+  const segments = segmentPages(manifest.pages.map((p) => p.index), manifest.params.doc_break_policy);
+  let docIdx = 1;
+  for (const seg of segments) {
+    const outDoc = path.join(runDir, `doc_${String(docIdx).padStart(4, "0")}.tiff`);
+    const segFiles = seg.map((i) => manifest.pages[i - 1]?.path).filter(Boolean) as string[];
+    await assembleTiff(segFiles, outDoc, config);
+    manifest.documents.push({ index: docIdx, pages: seg, path: outDoc, sha256: await hashFile(outDoc) });
+    docIdx++;
+  }
 }
 
-function updateManifest(runDir: string, manifest: Manifest) {
-    const manifestPath = path.join(runDir, "manifest.json");
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+async function updateManifest(runDir: string, manifest: Manifest) {
+  const manifestPath = path.join(runDir, "manifest.json");
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
 export async function startScanJob(input: StartScanInput, ctx: AppContext): Promise<StartScanResult> {
@@ -195,14 +193,14 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
 
   if (!scanSuccessful) {
     manifest.state = "error";
-    updateManifest(runDir, manifest);
-    appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_error", data: { reason: "all candidates failed" } });
+    await updateManifest(runDir, manifest);
+    await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_error", data: { reason: "all candidates failed" } });
 
     const errPath = path.join(runDir, "scanner.err.log");
     const outPath = path.join(runDir, "scanner.out.log");
 
-    const stderrTail = tailTextFile(errPath, 120);
-    const stdoutTail = tailTextFile(outPath, 40);
+    const stderrTail = await tailTextFile(errPath, 120);
+    const stdoutTail = await tailTextFile(outPath, 40);
 
     logger.error(
       { jobId: manifest.job_id, runDir, errLog: errPath, outLog: outPath, stderrTail, stdoutTail },
@@ -214,9 +212,9 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
   await processPages(runDir, manifest, ctx);
 
   manifest.state = "completed";
-  updateManifest(runDir, manifest);
-  appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_completed" });
-  if (manifest.device_id) saveLastUsedDevice(manifest.device_id, ctx.config);
+  await updateManifest(runDir, manifest);
+  await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_completed" });
+  if (manifest.device_id) await saveLastUsedDevice(manifest.device_id, ctx.config);
   logger.debug({ jobId: manifest.job_id }, "scan job completed");
 
   return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
@@ -225,8 +223,8 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
 export async function getJobStatus(jobId: string, ctx: AppContext, baseDir?: string) {
   const runDir = path.join(path.resolve(baseDir ?? ctx.config.INBOX_DIR), jobId);
   const manifestPath = path.join(runDir, "manifest.json");
-  if (!fs.existsSync(manifestPath)) return { job_id: jobId, state: "unknown", error: "manifest not found" } as const;
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  if (!(await fileExists(manifestPath))) return { job_id: jobId, state: "unknown", error: "manifest not found" } as const;
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
   return {
     job_id: manifest.job_id,
     state: manifest.state,
@@ -248,11 +246,11 @@ export async function cancelJob(jobId: string, ctx: AppContext, baseDir?: string
 
   // Update the manifest to reflect the cancellation
   const manifestPath = path.join(runDir, "manifest.json");
-  if (!fs.existsSync(manifestPath)) return { ok: false, error: "manifest not found" } as const;
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  if (!(await fileExists(manifestPath))) return { ok: false, error: "manifest not found" } as const;
+  const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
   manifest.state = "cancelled";
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-  appendEvent(path.join(runDir, "events.jsonl"), { ts: new Date().toISOString(), type: "job_cancelled" });
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  await appendEvent(path.join(runDir, "events.jsonl"), { ts: new Date().toISOString(), type: "job_cancelled" });
   logger.debug({ jobId }, "scan job cancelled");
   return { ok: true } as const;
 }
@@ -266,20 +264,26 @@ export type JobInfo = {
   documents?: number;
 };
 
-export async function listJobs(ctx: AppContext, { limit, state }: { limit?: number; state?: string } = {}): Promise<JobInfo[]> {
+export async function listJobs(
+  ctx: AppContext,
+  { limit, state }: { limit?: number; state?: string } = {}
+): Promise<JobInfo[]> {
   const base = path.resolve(ctx.config.INBOX_DIR);
-  if (!fs.existsSync(base)) return [];
-  const entries = fs
-    .readdirSync(base, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && d.name.startsWith("job-"))
-    .map((d) => ({ name: d.name, run_dir: path.join(base, d.name) }));
+  let entries: { name: string; run_dir: string }[] = [];
+  try {
+    entries = (await fs.readdir(base, { withFileTypes: true }))
+      .filter((d) => d.isDirectory() && d.name.startsWith("job-"))
+      .map((d) => ({ name: d.name, run_dir: path.join(base, d.name) }));
+  } catch {
+    return [];
+  }
 
   const items: JobInfo[] = [];
   for (const e of entries) {
     const manifestPath = path.join(e.run_dir, "manifest.json");
-    if (fs.existsSync(manifestPath)) {
+    if (await fileExists(manifestPath)) {
       try {
-        const m = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+        const m = JSON.parse(await fs.readFile(manifestPath, "utf8"));
         items.push({
           job_id: m.job_id || e.name,
           run_dir: e.run_dir,
@@ -291,7 +295,7 @@ export async function listJobs(ctx: AppContext, { limit, state }: { limit?: numb
         continue;
       } catch {}
     }
-    const st = fs.statSync(e.run_dir);
+    const st = await fs.stat(e.run_dir);
     items.push({ job_id: e.name, run_dir: e.run_dir, state: "unknown", created_at: new Date(st.mtimeMs).toISOString() });
   }
 
@@ -305,14 +309,23 @@ export async function listJobs(ctx: AppContext, { limit, state }: { limit?: numb
   return typeof limit === "number" && limit > 0 ? filtered.slice(0, limit) : filtered;
 }
 
-function hashFile(p: string): string {
+async function fileExists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function hashFile(p: string): Promise<string> {
   const h = crypto.createHash("sha256");
-  h.update(fs.readFileSync(p));
+  h.update(await fs.readFile(p));
   return h.digest("hex");
 }
 
-function appendEvent(eventsPath: string, evt: Record<string, unknown>) {
-  fs.appendFileSync(eventsPath, JSON.stringify(evt) + "\n");
+async function appendEvent(eventsPath: string, evt: Record<string, unknown>) {
+  await fs.appendFile(eventsPath, JSON.stringify(evt) + "\n");
 }
 
 export function planScanCommands(input: StartScanInput, runDir: string, ctx: AppContext): { bin: string; args: string[] }[] {
@@ -357,14 +370,14 @@ async function assembleTiff(inputFiles: string[], outPath: string, config: AppCo
   if (inputFiles.length === 0) return;
   if (config.SCAN_MOCK) {
     // In mock mode, directly copy the first page to simulate assembly
-    fs.copyFileSync(inputFiles[0], outPath);
+    await fs.copyFile(inputFiles[0], outPath);
     return;
   }
   try {
     await execa(config.TIFFCP_BIN, [...inputFiles, outPath], { shell: false });
   } catch {
     // Fallback: copy the first page
-    fs.copyFileSync(inputFiles[0], outPath);
+    await fs.copyFile(inputFiles[0], outPath);
   }
 }
 
@@ -376,7 +389,7 @@ export async function resolveEffectiveInput(input: StartScanInput, ctx: AppConte
     const sel = await selectDevice(
       { desiredSource: out.source, desiredResolutionDpi: out.resolution_dpi },
       ctx,
-      loadLastUsedDevice(config) || undefined
+      (await loadLastUsedDevice(config)) || undefined
     );
     if (sel) out.device_id = sel.deviceId;
   }
@@ -469,27 +482,27 @@ function pageSizeMm(input: StartScanInput): { width: number; height: number } | 
   }
 }
 
-function stateDir(config: AppConfig) {
+async function stateDir(config: AppConfig) {
   const base = path.resolve(config.INBOX_DIR, "..", "..", ".state");
-  fs.mkdirSync(base, { recursive: true });
+  await fs.mkdir(base, { recursive: true });
   return base;
 }
 
-function lastUsedPath(config: AppConfig) {
-  return path.join(stateDir(config), "scan-mcp.json");
+async function lastUsedPath(config: AppConfig) {
+  return path.join(await stateDir(config), "scan-mcp.json");
 }
 
-function saveLastUsedDevice(deviceId: string, config: AppConfig) {
-  const p = lastUsedPath(config);
+async function saveLastUsedDevice(deviceId: string, config: AppConfig) {
+  const p = await lastUsedPath(config);
   try {
-    fs.writeFileSync(p, JSON.stringify({ device_id: deviceId }, null, 2));
+    await fs.writeFile(p, JSON.stringify({ device_id: deviceId }, null, 2));
   } catch {}
 }
 
-function loadLastUsedDevice(config: AppConfig): string | null {
-  const p = lastUsedPath(config);
+async function loadLastUsedDevice(config: AppConfig): Promise<string | null> {
+  const p = await lastUsedPath(config);
   try {
-    const raw = fs.readFileSync(p, "utf8");
+    const raw = await fs.readFile(p, "utf8");
     const j = JSON.parse(raw);
     return typeof j.device_id === "string" ? j.device_id : null;
   } catch {
