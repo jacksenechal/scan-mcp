@@ -13,8 +13,6 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
   const orientationUri = "mcp://scan-mcp/orientation";
   const orientationText = fs.readFileSync(orientationPath, "utf8");
   const orientationLastModified = fs.statSync(orientationPath).mtime.toISOString();
-  const orientationSummary =
-    "scan-mcp discovers scanners and starts jobs (300dpi lineart via ADF duplex by default); inspect results via manifest and events.";
 
   // Tools
   // No input schema so clients may omit params entirely
@@ -119,13 +117,13 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
   );
 
   server.tool(
-    "start_here",
-    "Compatibility fallback: returns orientation URI; prefer resources and prompts",
+    "Start Here for ScanServerOrientation",
+    "Compatibility fallback: returns full orientation document; prefer resources and prompts",
     async () => ({
       content: [
         {
           type: "text",
-          text: JSON.stringify({ orientation_uri: orientationUri, summary: orientationSummary }),
+          text: `URI: ${orientationUri}\n\n${orientationText}`,
         },
       ],
     })
