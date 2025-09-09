@@ -16,7 +16,9 @@
     "start:http": "node dist/http-server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "vitest --coverage"
+    "test": "vitest --coverage",
+    "test:run": "vitest run --coverage",
+    "verify": "npm run lint && npm run typecheck && npm test"
   },
   "bin": {
     "scan-mcp": "bin/scan-mcp"

@@ -98,21 +98,6 @@ After `start_scan_job`, you receive `{ job_id, run_dir, state }`.
 - If the user supplies partial parameters, the server normalizes to the device’s vocabulary (e.g., case-insensitive color mode matching) and fills missing fields.
 - For photo-quality tasks, explicitly choosing `Flatbed` + `Color` + highest `resolution_dpi` is recommended.
 
-## Minimal Examples (mcptools)
-Note: command syntax shown as a reference for humans; an LLM client will call tools via MCP messages.
-
-- Default scan:
-  - `mcp call start_scan_job --params '{}' scan -f pretty`
-
-- Photo scan (flatbed, color, max dpi):
-  1) `mcp call list_devices scan`
-  2) `mcp call get_device_options --params '{"device_id":"<id>"}' scan`
-  3) `mcp call start_scan_job --params '{"device_id":"<id>","source":"Flatbed","color_mode":"Color","resolution_dpi":1200}' scan`
-
-- Check status/logs:
-  - `mcp call get_job_status --params '{"job_id":"<job>"}' scan`
-  - `mcp call get_manifest --params '{"job_id":"<job>"}' scan`
-  - `mcp call get_events --params '{"job_id":"<job>"}' scan`
 
 ## References
 - Defaults and selection logic are documented in `mcp/scan-mcp/README.md` under “Scan Defaults and Selection Logic”.
