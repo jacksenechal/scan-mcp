@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { tailTextFile } from "../services/file-io.js";
+import { tailTextFile } from "../services/utils.js";
 
 const tmpDir = path.resolve(__dirname, ".tmp-tail");
 
