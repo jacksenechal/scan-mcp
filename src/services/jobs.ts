@@ -9,7 +9,7 @@ import { DEFAULT_RESOLUTION_DPI, LETTER_WIDTH_MM, LETTER_HEIGHT_MM, A4_WIDTH_MM,
 import { selectDevice } from "./select.js";
 import { getDeviceOptions } from "./sane.js";
 
-import { tailTextFile } from "./file-io.js";
+import { tailTextFile, resolveJobPath } from "./utils.js";
 
 const activeJobs = new Map<string, Subprocess>();
 
@@ -221,7 +221,7 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
 }
 
 export async function getJobStatus(jobId: string, ctx: AppContext, baseDir?: string) {
-  const runDir = path.join(path.resolve(baseDir ?? ctx.config.INBOX_DIR), jobId);
+  const runDir = resolveJobPath(jobId, baseDir ?? ctx.config.INBOX_DIR);
   const manifestPath = path.join(runDir, "manifest.json");
   if (!(await fileExists(manifestPath))) return { job_id: jobId, state: "unknown", error: "manifest not found" } as const;
   const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
@@ -236,7 +236,7 @@ export async function getJobStatus(jobId: string, ctx: AppContext, baseDir?: str
 
 export async function cancelJob(jobId: string, ctx: AppContext, baseDir?: string) {
   const { logger } = ctx;
-  const runDir = path.join(path.resolve(baseDir ?? ctx.config.INBOX_DIR), jobId);
+  const runDir = resolveJobPath(jobId, baseDir ?? ctx.config.INBOX_DIR);
 
   // Terminate the running process, if it exists
   if (activeJobs.has(jobId)) {
