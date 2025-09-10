@@ -100,6 +100,6 @@ After `start_scan_job`, you receive `{ job_id, run_dir, state }`.
 
 
 ## References
-- Defaults and selection logic are documented in `mcp/scan-mcp/README.md` under “Scan Defaults and Selection Logic”.
-- Environment config (e.g., `INBOX_DIR`, `LOG_LEVEL`, `SCAN_MOCK`) lives in `mcp/scan-mcp/src/config.ts` and package README.
+- Defaults and selection logic are documented in the `scan-mcp` server's `README.md` file, under “Scan Defaults and Selection Logic”.
+- Environment config (e.g., `INBOX_DIR`, `LOG_LEVEL`, `SCAN_MOCK`) lives in `src/config.ts`.
 
