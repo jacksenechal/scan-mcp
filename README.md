@@ -68,7 +68,7 @@ MCP Server Config (JSON)
 ```
 
 Environment
-- `SCAN_MOCK` (default: `false`): when `true`, mock SANE calls and create fake pages/docs on `start_scan_job` for TDD. Leave as `false` to use your real scanner.
+- `SCAN_MOCK` (default: `false`): when `true`, mock SANE calls and create fake pages/docs on `start_scan_job` for testing. Leave as `false` to use your real scanner.
 - `INBOX_DIR` (default: `scanned_documents/inbox`): base directory for job run directories and artifacts.
 - `SCANIMAGE_BIN`/`SCANADF_BIN` (defaults: `scanimage`/`scanadf`): override paths to system binaries.
 - `TIFFCP_BIN`/`IM_CONVERT_BIN` (defaults: `tiffcp`/`convert`): assembly tools for multipage TIFFs.
@@ -97,7 +97,7 @@ Notes
 - Intelligent device selection implemented (no vendor hardcodes). Use `SCAN_EXCLUDE_BACKENDS`/`SCAN_PREFER_BACKENDS` to tune.
 - Implemented page-count document splitting and multipage TIFF assembly (`tiffcp` preferred; fallback copy).
 - Next: map full ADF/duplex/page-size flags, add blank-page/timer doc-break, and improve error/status details.
-- Follow the conventions in docs/CONVENTIONS.md; see docs/BLUEPRINT.md for high-level architecture and flows.
+ - Follow the conventions in [CONVENTIONS.md](./CONVENTIONS.md); see [BLUEPRINT.md](./BLUEPRINT.md) for high-level architecture and flows.
 
 ## Scan Defaults and Selection Logic
 
