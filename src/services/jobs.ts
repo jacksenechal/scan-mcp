@@ -185,7 +185,7 @@ async function updateManifest(runDir: string, manifest: Manifest) {
 }
 
 export async function startScanJob(input: StartScanInput, ctx: AppContext): Promise<StartScanResult> {
-  const { logger } = ctx;
+  const { logger, config } = ctx;
   logger.debug({ input }, "start scan job");
   const { runDir, manifest, eventsPath } = await initializeJob(input, ctx);
 
@@ -214,7 +214,9 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
   manifest.state = "completed";
   await updateManifest(runDir, manifest);
   await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_completed" });
-  if (manifest.device_id) await saveLastUsedDevice(manifest.device_id, ctx.config);
+  if (config.PERSIST_LAST_USED_DEVICE && manifest.device_id) {
+    await saveLastUsedDevice(manifest.device_id, config);
+  }
   logger.debug({ jobId: manifest.job_id }, "scan job completed");
 
   return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
@@ -386,10 +388,11 @@ export async function resolveEffectiveInput(input: StartScanInput, ctx: AppConte
   const out: StartScanInput = { ...input };
 
   if (!out.device_id) {
+    const lastUsed = config.PERSIST_LAST_USED_DEVICE ? await loadLastUsedDevice(config) : null;
     const sel = await selectDevice(
       { desiredSource: out.source, desiredResolutionDpi: out.resolution_dpi },
       ctx,
-      (await loadLastUsedDevice(config)) || undefined
+      lastUsed || undefined
     );
     if (sel) out.device_id = sel.deviceId;
   }

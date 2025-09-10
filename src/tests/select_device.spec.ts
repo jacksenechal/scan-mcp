@@ -14,6 +14,7 @@ const config: AppConfig = {
   SCANIMAGE_BIN: "scanimage",
   TIFFCP_BIN: "tiffcp",
   IM_CONVERT_BIN: "convert",
+  PERSIST_LAST_USED_DEVICE: true,
 };
 const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
 const ctx: AppContext = { config, logger };
@@ -49,4 +50,3 @@ describe("device selection", () => {
     expect(sel!.deviceId).toBe("xyz:000:001");
   });
 });
-

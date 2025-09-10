@@ -74,6 +74,7 @@ Environment
 - `TIFFCP_BIN`/`IM_CONVERT_BIN` (defaults: `tiffcp`/`convert`): assembly tools for multipage TIFFs.
  - `SCAN_EXCLUDE_BACKENDS` (CSV): backends to exclude from selection (e.g., `v4l`).
  - `SCAN_PREFER_BACKENDS` (CSV): lightly prefer these backends when ranking (e.g., `epjitsu,epson2`).
+ - `PERSIST_LAST_USED_DEVICE` (default: `true`): when `true`, save the last used `device_id` to `.state/scan-mcp.json` and lightly prefer it during auto-selection. Set to `false` to disable this persistence.
 
 Device selection and real hardware smoke
 1) Ensure system deps are installed (`scanimage`).

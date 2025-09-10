@@ -12,6 +12,8 @@ export const ConfigSchema = z.object({
   // By default, exclude camera-like backends like v4l from device lists
   SCAN_EXCLUDE_BACKENDS: z.array(z.string()).default(["v4l"]),
   SCAN_PREFER_BACKENDS: z.array(z.string()).default([]),
+  // Control whether we persist last-used device preference under .state/
+  PERSIST_LAST_USED_DEVICE: z.boolean().default(true),
 });
 
 export type AppConfig = z.infer<typeof ConfigSchema>;
@@ -28,6 +30,7 @@ export function loadConfig(): AppConfig {
     IM_CONVERT_BIN: process.env.IM_CONVERT_BIN,
     SCAN_EXCLUDE_BACKENDS: parseCsv(process.env.SCAN_EXCLUDE_BACKENDS),
     SCAN_PREFER_BACKENDS: parseCsv(process.env.SCAN_PREFER_BACKENDS),
+    PERSIST_LAST_USED_DEVICE: parseEnvBool(process.env.PERSIST_LAST_USED_DEVICE),
   };
   const parsed = ConfigSchema.safeParse(env);
   if (!parsed.success) {
