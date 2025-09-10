@@ -12,9 +12,9 @@ Quickstart (development)
    - npm install
 2. Run in dev mode (stdio or HTTP):
    - Do not start the server via any `npm run …` command from an MCP client; npm prints a preamble and/or suppresses stdio, which breaks the MCP protocol.
-   - For MCP clients (stdio), launch one of these directly:
-     - `node /absolute/path/to/mcp/scan-mcp/dist/mcp.js`
-     - `scan-mcp` (after `npm link`)
+    - For MCP clients (stdio), launch one of these directly:
+      - `node dist/mcp.js`
+      - `scan-mcp` (after `npm link`)
    - For HTTP/Streamable + SSE (development/testing):
      - `npm run dev:http` (express server with POST `/mcp` and GET `/sse`)
      - Build + run: `npm run build && npm run start:http`
@@ -32,8 +32,8 @@ Run Anywhere (CLI)
   - mcp tools scan-mcp
   - mcp call list_devices scan-mcp -f pretty
 - Without linking, you can also run directly:
-  - node /absolute/path/to/mcp/scan-mcp/dist/mcp.js
-  - Or from repo root: npm --prefix mcp/scan-mcp start
+  - node dist/mcp.js
+  - npm start
 
 MCP Server Config (JSON)
 - Example client config block to register this server:
@@ -44,7 +44,7 @@ MCP Server Config (JSON)
       "command": "scan-mcp",
       "args": [],
       "env": {
-        "INBOX_DIR": "/home/jack/workspace/scan-agent/scanned_documents/inbox",
+        "INBOX_DIR": "scanned_documents/inbox",
         "LOG_LEVEL": "info",
         "SCAN_MOCK": "0"
       }
@@ -55,16 +55,16 @@ MCP Server Config (JSON)
 - If you prefer not to use `npm link`, substitute a direct Node command:
 ```
 {
-  "mcpServers": {
-    "scan": {
-      "command": "node",
-      "args": [
-        "/home/jack/workspace/scan-agent/mcp/scan-mcp/dist/mcp.js"
-      ],
-      "env": { "INBOX_DIR": "/home/jack/workspace/scan-agent/scanned_documents/inbox" }
+    "mcpServers": {
+      "scan": {
+        "command": "node",
+        "args": [
+          "mcp/scan-mcp/dist/mcp.js"
+        ],
+        "env": { "INBOX_DIR": "scanned_documents/inbox" }
+      }
     }
   }
-}
 ```
 
 Environment
