@@ -1,0 +1,25 @@
+# Node/TypeScript build artifacts
+node_modules/
+dist/
+coverage/
+.eslintcache
+.tmp-*/
+tsconfig.tsbuildinfo
+
+# VSCode
+.vscode/
+
+# Ignore compiled test artifacts
+tests/*.js
+tests/*.d.ts
+tests/.tmp-*
+
+# Scanned Docs
+scanned_documents/
+
+# Local state directories
+**/.state/
+
+# Local Files
+.env
+
