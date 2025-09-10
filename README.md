@@ -144,3 +144,28 @@ Practical summary
 - Defaults aim for 300dpi, Lineart, and a feeder if available (duplex preferred). If feeder info isn’t available, falls back to Flatbed.
 - Duplex isn’t a separate flag passed to `scanimage`; it’s expressed by selecting the “ADF Duplex” source when available.
 - You can override any of `device_id`, `resolution_dpi`, `color_mode`, `source`, `duplex`, and `page_size`; the server normalizes your inputs against what the device supports.
+
+## Roadmap
+
+### Resource-based Document Access
+
+Replace filesystem paths with MCP resource URIs (e.g., mcp://scan-mcp/jobs/{job_id}/document/1) to
+enable better integration with document processing pipelines. This would allow other MCP servers to
+consume scanned documents directly via ReadMcpResourceTool without filesystem coupling, improving
+portability and security while enabling cleaner composition with other document processing utilities.
+
+### Real-time Job Progress Updates
+
+Implement streaming progress updates for long-running scan jobs instead of polling-based status
+checks. For multi-page jobs (100+ pages), this would provide immediate feedback on page-by-page
+progress, error notifications, and job completion events.
+
+See: https://modelcontextprotocol.io/specification/2025-03-26/basic/utilities/progress
+
+In a similar vein, the cancel_job tool could be replaced with the more idiomatic MCP cancellation flow:
+https://modelcontextprotocol.io/specification/2025-03-26/basic/utilities/cancellation
+
+#### Support for MacOS and Windows Sanning Backends
+
+Currently, scan-mcp only supports Linux scanning backends via sane/scanimage.
+Support for MacOS and Windows backends would be a welcome addition.
