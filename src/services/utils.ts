@@ -1,28 +1,27 @@
-import fs from "fs";
+import { promises as fs } from "fs";
 import path from "path";
 
 const DEFAULT_BYTE_WINDOW = 64 * 1024; // 64 KiB
 
 // Read the last N lines of a UTF-8 text file by streaming from the end.
 // Returns undefined on any error or if the file does not exist.
-export function tailTextFile(
+export async function tailTextFile(
   file: string,
   maxLines = 80,
   byteWindow = DEFAULT_BYTE_WINDOW,
-): string | undefined {
+): Promise<string | undefined> {
   try {
-    if (!fs.existsSync(file)) return undefined;
-    const fd = fs.openSync(file, "r");
+    await fs.access(file);
+    const handle = await fs.open(file, "r");
     try {
-      const { size } = fs.fstatSync(fd);
+      const { size } = await handle.stat();
       const readSize = Math.min(byteWindow, size);
       const buffer = Buffer.alloc(readSize);
-      // Read the last `readSize` bytes from the file
-      fs.readSync(fd, buffer, 0, readSize, size - readSize);
+      await handle.read(buffer, 0, readSize, size - readSize);
       const lines = buffer.toString("utf8").split(/\r?\n/);
       return lines.slice(-maxLines).join("\n");
     } finally {
-      fs.closeSync(fd);
+      await handle.close();
     }
   } catch {
     return undefined;

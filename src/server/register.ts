@@ -8,12 +8,13 @@ import { listDevices, getDeviceOptions } from "../services/sane.js";
 import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/jobs.js";
 import { resolveJobPath } from "../services/utils.js";
 
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const orientationPath = path.resolve(currentDir, "../../ORIENTATION.md");
+const orientationUri = "mcp://scan-mcp/orientation";
+const orientationText = await fs.readFile(orientationPath, "utf8");
+const orientationLastModified = (await fs.stat(orientationPath)).mtime.toISOString();
+
 export function registerScanServer(server: McpServer, ctx: AppContext) {
-  const currentDir = path.dirname(fileURLToPath(import.meta.url));
-  const orientationPath = path.resolve(currentDir, "../../ORIENTATION.md");
-  const orientationUri = "mcp://scan-mcp/orientation";
-  const orientationText = fs.readFileSync(orientationPath, "utf8");
-  const orientationLastModified = fs.statSync(orientationPath).mtime.toISOString();
 
   // Tools
   // No input schema so clients may omit params entirely

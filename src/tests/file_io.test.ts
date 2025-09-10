@@ -14,16 +14,14 @@ describe("tailTextFile", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("returns undefined for missing file", () => {
-    const res = tailTextFile(path.join(tmpDir, "missing.log"));
-    expect(res).toBeUndefined();
+  it("returns undefined for missing file", async () => {
+    await expect(tailTextFile(path.join(tmpDir, "missing.log"))).resolves.toBeUndefined();
   });
 
-  it("returns last N lines", () => {
+  it("returns last N lines", async () => {
     const file = path.join(tmpDir, "log.txt");
     const lines = Array.from({ length: 200 }, (_, i) => `line-${i + 1}`);
     fs.writeFileSync(file, lines.join("\n"));
-    const tail = tailTextFile(file, 10);
-    expect(tail?.split("\n")).toEqual(lines.slice(-10));
+    await expect(tailTextFile(file, 10)).resolves.toEqual(lines.slice(-10).join("\n"));
   });
 });
