@@ -6,6 +6,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { loadConfig } from "./config.js";
 import { registerScanServer } from "./server/register.js";
 import type { AppContext } from "./context.js";
+import pkg from "../package.json" with { type: "json" };
+
+export const version = pkg.version as string;
 
 const config = loadConfig();
 // Send logs to stderr to keep stdout clean for MCP protocol
@@ -14,8 +17,16 @@ const ctx: AppContext = { config, logger };
 
 export async function main() {
   const server = new McpServer(
-    { name: "scan-mcp", version: "0.1.0" },
-    { capabilities: { tools: {}, resources: {} } }
+    { name: "scan-mcp", version },
+    {
+      capabilities: {
+        resources: { listChanged: true },
+        prompts: { listChanged: true },
+        tools: { listChanged: true },
+      },
+      instructions:
+        "On first use, read resource uri 'mcp://scan-mcp/orientation' for capabilities and defaults.",
+    }
   );
   registerScanServer(server, ctx);
 

@@ -4,6 +4,7 @@ import { registerScanServer } from "../server/register.js";
 import type { AppConfig } from "../config.js";
 import type { AppContext } from "../context.js";
 import type { Logger } from "pino";
+import { version } from "../mcp.js";
 
 const baseConfig: AppConfig = {
   SCAN_MOCK: true,
@@ -21,11 +22,13 @@ const ctx: AppContext = { config: baseConfig, logger };
 
 describe("registerScanServer", () => {
   it("registers expected tools and resources", () => {
-    const server = new McpServer({ name: "scan-mcp", version: "0.1.0" }, { capabilities: { tools: {}, resources: {} } });
+    const server = new McpServer({ name: "scan-mcp", version }, { capabilities: { tools: {}, resources: {} } });
     registerScanServer(server, ctx);
     const internal = server as unknown as {
       _registeredTools: Record<string, unknown>;
       _registeredResourceTemplates: Record<string, unknown>;
+      _registeredResources: Record<string, unknown>;
+      _registeredPrompts: Record<string, unknown>;
     };
     const tools = Object.keys(internal._registeredTools);
     expect(tools).toEqual(
@@ -38,22 +41,39 @@ describe("registerScanServer", () => {
         "list_jobs",
         "get_manifest",
         "get_events",
+        "Start Here for ScanServerOrientation",
       ])
     );
     const resources = Object.keys(internal._registeredResourceTemplates);
     expect(resources).toEqual(expect.arrayContaining(["manifest", "events"]));
+    const staticResources = Object.keys(internal._registeredResources);
+    expect(staticResources).toEqual(
+      expect.arrayContaining(["mcp://scan-mcp/orientation"])
+    );
+    const prompts = Object.keys(internal._registeredPrompts);
+    expect(prompts).toEqual(expect.arrayContaining(["bootstrap_context"]));
   });
 
   it("get_manifest reports missing file as error", async () => {
-    const server = new McpServer({ name: "scan-mcp", version: "0.1.0" }, { capabilities: { tools: {}, resources: {} } });
+    const server = new McpServer({ name: "scan-mcp", version }, { capabilities: { tools: {}, resources: {} } });
     registerScanServer(server, ctx);
     const internal = server as unknown as {
       _registeredTools: Record<string, { callback: (args: unknown) => Promise<{ isError?: boolean; content: { type: string }[] }> }>;
     };
     const tool = internal._registeredTools["get_manifest"];
-    const result = await tool.callback({ job_id: "does-not-exist" });
+    const result = await tool.callback({ job_id: "job-00000000-0000-0000-0000-000000000000" });
     expect(result.isError).toBe(true);
     expect(result.content[0].type).toBe("text");
+  });
+
+  it("get_manifest rejects malicious job_id", async () => {
+    const server = new McpServer({ name: "scan-mcp", version: "0.1.0" }, { capabilities: { tools: {}, resources: {} } });
+    registerScanServer(server, ctx);
+    const internal = server as unknown as {
+      _registeredTools: Record<string, { callback: (args: unknown) => Promise<unknown> }>;
+    };
+    const tool = internal._registeredTools["get_manifest"];
+    await expect(tool.callback({ job_id: "../etc/passwd" })).rejects.toThrow();
   });
 });
 

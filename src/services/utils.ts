@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 
 const DEFAULT_BYTE_WINDOW = 64 * 1024; // 64 KiB
 
@@ -26,4 +27,12 @@ export function tailTextFile(
   } catch {
     return undefined;
   }
+}
+
+export function resolveJobPath(jobId: string, baseDir: string): string {
+  if (!/^job-[0-9a-fA-F-]{36}$/.test(jobId)) throw new Error("invalid job_id");
+  const base = path.resolve(baseDir);
+  const full = path.resolve(base, jobId);
+  if (!full.startsWith(base + path.sep)) throw new Error("invalid job_id");
+  return full;
 }

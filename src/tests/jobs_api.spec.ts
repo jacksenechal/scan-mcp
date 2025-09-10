@@ -68,5 +68,10 @@ describe("jobs api", () => {
     const jobs = await listJobs(ctx, {});
     expect(jobs).toHaveLength(2);
   });
+
+  it("rejects malicious job_id", async () => {
+    await expect(getJobStatus("../etc/passwd", ctx)).rejects.toThrow();
+    await expect(cancelJob("../etc/passwd", ctx)).rejects.toThrow();
+  });
 });
 
