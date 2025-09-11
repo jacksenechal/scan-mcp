@@ -1,6 +1,6 @@
 {
   "name": "scan-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "type": "module",
   "description": "scan-mcp: MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly",
