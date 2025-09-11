@@ -1,0 +1,86 @@
+name: Debug Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref or tag to test publish from
+        required: false
+        default: main
+      auth:
+        description: Auth mode (trusted|classic)
+        required: false
+        default: trusted
+      dry_run:
+        description: Run npm publish with --dry-run
+        required: false
+        default: 'true'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  debug-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          registry-url: 'https://registry.npmjs.org'
+          always-auth: true
+
+      - name: Environment info
+        run: |
+          node -v
+          npm -v
+          npm config get registry
+          npm whoami || true
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Build and test
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run build
+          npm run pack:check
+          npm test -- --run
+
+      - name: Publish (trusted)
+        if: ${{ github.event.inputs.auth == 'trusted' }}
+        env:
+          NPM_CONFIG_PROVENANCE: true
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = 'true' ]; then
+            npm publish --provenance --access public --dry-run
+          else
+            npm publish --provenance --access public
+          fi
+
+      - name: Publish (classic token)
+        if: ${{ github.event.inputs.auth == 'classic' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = 'true' ]; then
+            npm publish --access public --dry-run
+          else
+            npm publish --access public
+          fi
+
+      - name: Start SSH debug session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+        timeout-minutes: 60
+

@@ -26,3 +26,9 @@
 - Network access is allowed for installing packages, fetching docs, or calling external APIs.
 - If the sandbox blocks a command, re-run it with elevated permissions and a brief justification.
 - Do not commit secrets; document required environment variables instead.
+
+## CI Debugging
+- To live-debug publish issues, use the `Debug Publish` workflow (workflow_dispatch):
+  - Inputs: `ref` (tag or branch), `auth` (`trusted` or `classic`), `dry_run` (default true).
+  - On failure it opens a temporary tmate SSH session restricted to the triggering actor.
+- The release workflow also opens a tmate session automatically if it fails.

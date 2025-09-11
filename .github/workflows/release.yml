@@ -47,3 +47,10 @@ jobs:
         run: |
           # Best practice: rebuild from source at the tagged commit; do not rely on GitHub release assets.
           npm publish --provenance --access public
+
+      - name: Start SSH debug session on failure
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+        timeout-minutes: 60
