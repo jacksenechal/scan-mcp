@@ -5,6 +5,7 @@ coverage/
 .eslintcache
 .tmp-*/
 tsconfig.tsbuildinfo
+.npm-cache-pack
 
 # VSCode
 .vscode/

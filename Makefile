@@ -23,6 +23,10 @@ lint-fix:
 build:
 	npm run build
 
+.PHONY: pack-check
+pack-check:
+	npm run pack:check
+
 .PHONY: test
 test:
 	npm test -- --run
@@ -33,4 +37,5 @@ verify:
 	$(MAKE) typecheck
 	$(MAKE) lint
 	$(MAKE) build
+	$(MAKE) pack-check
 	$(MAKE) test

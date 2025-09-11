@@ -1,0 +1,52 @@
+#!/usr/bin/env node
+// Minimal ESM launcher for the compiled MCP server with a help handler.
+
+const args = process.argv.slice(2);
+const wantsHelp = args.includes('-h') || args.includes('--help') || args.includes('help');
+const wantsVersion = args.includes('-v') || args.includes('--version') || args.includes('version');
+
+if (wantsHelp) {
+  const version = process.env.npm_package_version || 'unknown';
+  const usage = `
+scan-mcp v${version}
+
+Usage:
+  scan-mcp [--help]
+
+Description:
+  Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly.
+
+Environment:
+  SCAN_MOCK                Mock SANE; generate fake TIFFs (default: false)
+  INBOX_DIR                Base directory for job runs (default: scanned_documents/inbox)
+  SCANIMAGE_BIN            Path to scanimage (default: scanimage)
+  SCANADF_BIN              Path to scanadf (default: scanadf)
+  TIFFCP_BIN               Path to tiffcp (default: tiffcp)
+  IM_CONVERT_BIN           Path to convert (default: convert)
+  SCAN_EXCLUDE_BACKENDS    CSV backends to exclude (e.g., v4l)
+  SCAN_PREFER_BACKENDS     CSV backends to prefer (e.g., epjitsu,epson2)
+  PERSIST_LAST_USED_DEVICE Persist and prefer last used device (default: true)
+
+Examples:
+  # Run directly
+  scan-mcp
+
+  # Via npx in MCP client config
+  {
+    "mcpServers": {
+      "scan": { "command": "npx", "args": ["scan-mcp"] }
+    }
+  }
+`;
+  console.log(usage.trim());
+  process.exit(0);
+}
+
+if (wantsVersion) {
+  const version = process.env.npm_package_version || 'unknown';
+  console.log(version);
+  process.exit(0);
+}
+
+// Load the built entrypoint from dist
+import('../dist/mcp.js');

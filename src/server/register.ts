@@ -9,12 +9,8 @@ import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/job
 import { resolveJobPath } from "../services/utils.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const distOrientationPath = path.resolve(currentDir, "../resources/ORIENTATION.md");
-const rootOrientationPath = path.resolve(currentDir, "../../resources/ORIENTATION.md");
-const orientationPath = await fs
-  .stat(distOrientationPath)
-  .then(() => distOrientationPath)
-  .catch(() => rootOrientationPath);
+// Resources are published at package root under resources/**; do not copy into dist.
+const orientationPath = path.resolve(currentDir, "../../resources/ORIENTATION.md");
 const orientationUri = "mcp://scan-mcp/orientation";
 const orientationText = await fs.readFile(orientationPath, "utf8");
 const orientationLastModified = (await fs.stat(orientationPath)).mtime.toISOString();

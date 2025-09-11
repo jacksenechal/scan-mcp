@@ -1,7 +1,7 @@
 {
   "name": "scan-mcp",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "description": "scan-mcp: MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly",
   "main": "dist/mcp.js",
@@ -9,8 +9,10 @@
   "scripts": {
     "dev": "tsx watch src/mcp.ts",
     "dev:http": "tsx watch src/http-server.ts",
-    "build": "tsc -p tsconfig.json && cp resources dist/",
-    "prepare": "npm run build",
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
+    "pack:dry": "npm pack --dry-run --cache .npm-cache-pack",
+    "pack:check": "node scripts/check-tarball.mjs",
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "start": "node dist/mcp.js",
     "start:http": "node dist/http-server.js",
@@ -47,5 +49,30 @@
   "engines": {
     "node": ">=22"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "files": [
+    "bin/**",
+    "dist/**",
+    "schemas/**",
+    "resources/**",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jacksenechal/scan-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jacksenechal/scan-mcp/issues"
+  },
+  "homepage": "https://github.com/jacksenechal/scan-mcp#readme",
+  "keywords": [
+    "mcp",
+    "scanner",
+    "sane",
+    "tiff",
+    "cli",
+    "server",
+    "capture",
+    "duplex"
+  ]
 }
