@@ -16,5 +16,7 @@ jobs:
       - name: Release Please
         uses: googleapis/release-please-action@v4
         with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
           release-type: node
           target-branch: main
