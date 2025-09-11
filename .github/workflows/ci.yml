@@ -16,7 +16,7 @@ jobs:
       contents: read
     env:
       SCAN_MOCK: 'true'
-      INBOX_DIR: "${{ runner.temp }}/inbox"
+      INBOX_DIR: "${{ github.workspace }}/.tmp/inbox"
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
