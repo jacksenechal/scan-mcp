@@ -9,8 +9,8 @@ import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/job
 import { resolveJobPath } from "../services/utils.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const distOrientationPath = path.resolve(currentDir, "../ORIENTATION.md");
-const rootOrientationPath = path.resolve(currentDir, "../../ORIENTATION.md");
+const distOrientationPath = path.resolve(currentDir, "../resources/ORIENTATION.md");
+const rootOrientationPath = path.resolve(currentDir, "../../resources/ORIENTATION.md");
 const orientationPath = await fs
   .stat(distOrientationPath)
   .then(() => distOrientationPath)
