@@ -1,8 +1,12 @@
 name: Release
 
 on:
+  # Publish on GitHub Release publication and on pushed version tags.
   release:
-    types: [published]
+    types: [published, created]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -13,15 +17,19 @@ jobs:
   publish-npm:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout tag/ref
+        uses: actions/checkout@v4
+        with:
+          # Use the release tag when triggered by a release, otherwise use the pushed ref
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
-          registry-url: 'https://registry.npmjs.org'
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Verify build and tests
         run: |
           npm run typecheck
@@ -29,8 +37,11 @@ jobs:
           npm run build
           npm run pack:check
           npm test -- --run
-      - name: Publish to npm (Trusted Publisher)
+      - name: Publish to npm (Trusted Publishing + provenance)
         env:
+          # For Trusted Publishing with provenance, do NOT set NODE_AUTH_TOKEN.
+          # Ensure the package is configured as a Trusted Publisher in npm for this repo.
           NPM_CONFIG_PROVENANCE: true
         run: |
+          # Best practice: rebuild from source at the tagged commit; do not rely on GitHub release assets.
           npm publish --provenance --access public
