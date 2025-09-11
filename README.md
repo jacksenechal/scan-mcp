@@ -1,5 +1,11 @@
 # scan-mcp
 
+[![CI](https://github.com/jacksenechal/scan-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/jacksenechal/scan-mcp/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/scan-mcp.svg)](https://www.npmjs.com/package/scan-mcp)
+![node-current](https://img.shields.io/node/v/scan-mcp)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
+
+
 Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly.
 
 - Small, typed MCP server exposing tools for device discovery and scan jobs
