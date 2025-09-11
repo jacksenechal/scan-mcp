@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 // Minimal ESM launcher for the compiled MCP server with a help handler.
 
+import pkg from '../package.json' with { type: 'json' };
+
 const args = process.argv.slice(2);
 const wantsHelp = args.includes('-h') || args.includes('--help') || args.includes('help');
 const wantsVersion = args.includes('-v') || args.includes('--version') || args.includes('version');
 
+const version = (pkg && pkg.version) || process.env.npm_package_version || 'unknown';
+
 if (wantsHelp) {
-  const version = process.env.npm_package_version || 'unknown';
   const usage = `
 scan-mcp v${version}
 
@@ -43,10 +46,14 @@ Examples:
 }
 
 if (wantsVersion) {
-  const version = process.env.npm_package_version || 'unknown';
   console.log(version);
   process.exit(0);
 }
 
-// Load the built entrypoint from dist
-import('../dist/mcp.js');
+// Load and run the built entrypoint from dist
+import('../dist/mcp.js')
+  .then((mod) => (typeof mod.main === 'function' ? mod.main() : undefined))
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

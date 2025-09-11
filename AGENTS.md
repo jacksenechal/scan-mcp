@@ -14,6 +14,14 @@
 - Keep commits focused and run `make verify` before sending a PR.
 - PRs should include a concise summary and relevant command output.
 
+## Releases (release-please)
+- This repo uses release-please to automate versioning and changelog generation.
+- Do not manually bump versions in `package.json` or other manifests.
+- Use conventional commits; release-please derives the next version from commit history.
+- If you need to force a specific version for a PR, include a line in the merge (squash) commit message body:
+  - `Release-As: x.y.z`
+- CI will open or update a release PR; merging it publishes the release per the configured workflow.
+
 ## Network and Approvals Policy
 - Network access is allowed for installing packages, fetching docs, or calling external APIs.
 - If the sandbox blocks a command, re-run it with elevated permissions and a brief justification.
