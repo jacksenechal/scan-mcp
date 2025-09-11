@@ -8,16 +8,6 @@ Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and mul
 
 Note: This package targets Node 22 and Linux SANE backends (`scanimage`).
 
-## Install
-
-- Run with npx: `npx scan-mcp`
-- CLI help: `scan-mcp --help`
-- Install npm: `npm i -g scan-mcp` then `scan-mcp`
-- From source (development):
-  - `npm install`
-  - `npm run build`
-  - MCP clients can run via `node dist/mcp.js` or `npx tsx src/mcp.ts`
-
 ## Quick Start (MCP client config)
 
 Add a server entry to your MCP client configuration:
@@ -38,6 +28,16 @@ Add a server entry to your MCP client configuration:
 
 - Call `start_scan_job` without a `device_id` to auto-select a scanner and begin scanning.
 - Artifacts are written under `INBOX_DIR` per job: `job-*/page_*.tiff`, `doc_*.tiff`, `manifest.json`, `events.jsonl`.
+
+## Install
+
+- Run with npx: `npx scan-mcp`
+- CLI help: `scan-mcp --help`
+- Install npm: `npm i -g scan-mcp` then `scan-mcp`
+- From source (development):
+  - `npm install`
+  - `npm run build`
+  - MCP clients can run via `node dist/mcp.js` or `npx tsx src/mcp.ts`
 
 ## System Requirements
 

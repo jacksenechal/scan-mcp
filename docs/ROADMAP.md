@@ -1,6 +1,6 @@
 # Roadmap
 
-This document collects ideas and larger enhancements that are out of scope for the minimal server.
+This document collects ideas and future work for scan-mcp.
 
 ## Resource-based Document Access
 
