@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo-full.png" alt="scan-mcp logo" width="240">
+</p>
+
 # scan-mcp
 
 [![CI](https://github.com/jacksenechal/scan-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/jacksenechal/scan-mcp/actions/workflows/ci.yml)
