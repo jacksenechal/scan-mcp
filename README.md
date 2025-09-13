@@ -1,10 +1,9 @@
 # scan-mcp
-[![npm downloads](https://img.shields.io/npm/dm/scan-mcp.svg)](https://www.npmjs.com/package/scan-mcp)
 
 [![CI](https://github.com/jacksenechal/scan-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/jacksenechal/scan-mcp/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/scan-mcp.svg)](https://www.npmjs.com/package/scan-mcp)
 ![node-current](https://img.shields.io/node/v/scan-mcp)
-[![MCP Badge](https://lobehub.com/badge/mcp/jacksenechal-scan-mcp?style=flat)](https://lobehub.com/mcp/jacksenechal-scan-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/scan-mcp.svg)](https://www.npmjs.com/package/scan-mcp)
 
 
 Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly.
@@ -93,3 +92,7 @@ Defaults aim for 300dpi, reasonable color mode, and ADF/duplex when available. F
 ## Roadmap
 
 Tracking ideas and future improvements are documented in `docs/ROADMAP.md`.
+
+---
+
+[![lobehub badge](https://lobehub.com/badge/mcp/jacksenechal-scan-mcp?style=flat)](https://lobehub.com/mcp/jacksenechal-scan-mcp)
