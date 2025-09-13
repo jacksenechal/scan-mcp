@@ -1,8 +1,9 @@
 <p align="center">
-  <img src="docs/assets/logo-full.png" alt="scan-mcp logo" width="240">
+  <img src="docs/assets/icon.png" alt="scan-mcp logo" width="96">
 </p>
 
-# scan-mcp
+<h1 align="center">scan-mcp</h1>
+
 
 [![CI](https://github.com/jacksenechal/scan-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/jacksenechal/scan-mcp/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/scan-mcp.svg)](https://www.npmjs.com/package/scan-mcp)
