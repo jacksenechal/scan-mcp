@@ -43,6 +43,7 @@ Add a server entry to your MCP client configuration:
 ## Install
 
 - Run with npx: `npx scan-mcp`
+  - The CLI runs a quick preflight check for Node 22+ and required scanner/image tools and prints installation hints if anything is missing.
 - CLI help: `scan-mcp --help`
 - Install npm: `npm i -g scan-mcp` then `scan-mcp`
 - From source (development):
