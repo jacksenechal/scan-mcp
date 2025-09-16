@@ -28,7 +28,10 @@ Add a server entry to your MCP client configuration:
   "mcpServers": {
     "scan": {
       "command": "npx",
-      "args": ["scan-mcp"],
+      "args": [
+        "-y",
+        "scan-mcp"
+      ],
       "env": {
         "INBOX_DIR": "~/Documents/scanned_documents/inbox"
       }
