@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/jacksenechal/scan-mcp/compare/v0.1.1...v0.2.0) (2025-09-16)
+
+
+### Features
+
+* add runtime preflight checks ([#17](https://github.com/jacksenechal/scan-mcp/issues/17)) ([a4ed79e](https://github.com/jacksenechal/scan-mcp/commit/a4ed79e40b792cf27c7213e9a2c8371292b087d7))
+
 ## [0.1.1](https://github.com/jacksenechal/scan-mcp/compare/v0.1.0...v0.1.1) (2025-09-11)
 
 
