@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, writeFileSync, chmodSync, rmSync } from "fs";
 import os from "os";
 import path from "path";
@@ -59,7 +59,9 @@ describe("preflight checks", () => {
 
   it("reports all required dependencies when PATH is empty", () => {
     delete process.env.PATH;
-    const missing = detectMissingDependencies(makeConfig());
+    const commandAvailable = vi.fn().mockReturnValue(false);
+    const missing = detectMissingDependencies(makeConfig(), { commandAvailable });
+    expect(commandAvailable).toHaveBeenCalled();
     expect(missing.map((m) => m.envVar).sort()).toEqual([
       "IM_CONVERT_BIN",
       "SCANIMAGE_BIN",

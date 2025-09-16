@@ -23,6 +23,10 @@ const REQUIRED_TOOLS: readonly RequiredTool[] = [
 
 export type MissingDependency = RequiredTool & { command: string };
 
+export interface DetectMissingDependenciesOptions {
+  commandAvailable?: (command: string) => boolean;
+}
+
 export type PreflightErrorDetails =
   | { type: "node-version"; requiredMajor: number; currentVersion: string }
   | { type: "missing-dependencies"; missing: MissingDependency[] };
@@ -84,11 +88,15 @@ export function ensureEnvironmentReady(options: EnsureEnvironmentOptions = {}): 
   }
 }
 
-export function detectMissingDependencies(config: AppConfig): MissingDependency[] {
+export function detectMissingDependencies(
+  config: AppConfig,
+  options: DetectMissingDependenciesOptions = {}
+): MissingDependency[] {
+  const isAvailable = options.commandAvailable ?? isCommandAvailable;
   const missing: MissingDependency[] = [];
   for (const tool of REQUIRED_TOOLS) {
     const configured = (config[tool.envVar] ?? "").trim();
-    if (!configured || !isCommandAvailable(configured)) {
+    if (!configured || !isAvailable(configured)) {
       missing.push({ ...tool, command: configured || tool.defaultCommand });
     }
   }
