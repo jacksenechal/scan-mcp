@@ -1,6 +1,7 @@
 {
   "name": "scan-mcp",
   "version": "0.2.0",
+  "mcpName": "io.github.jacksenechal/scan-mcp",
   "private": false,
   "type": "module",
   "description": "scan-mcp: MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly",

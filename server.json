@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.jacksenechal/scan-mcp",
+  "description": "MCP server for scanner discovery and batch capture via SANE",
+  "status": "active",
+  "website_url": "https://github.com/jacksenechal/scan-mcp",
+  "repository": {
+    "url": "https://github.com/jacksenechal/scan-mcp",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registry_type": "npm",
+      "registry_base_url": "https://registry.npmjs.org",
+      "identifier": "scan-mcp",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
