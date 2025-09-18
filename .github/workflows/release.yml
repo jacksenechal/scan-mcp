@@ -39,6 +39,13 @@ jobs:
           npm run build
           npm run pack:check
           npm test -- --run
+      - name: Ensure server manifest versions match package
+        run: |
+          PACKAGE_VERSION=$(jq -r '.version' package.json)
+          MANIFEST_VERSION=$(jq -r '.version' server.json)
+          MANIFEST_PACKAGE_VERSION=$(jq -r '.packages[0].version' server.json)
+          test "$PACKAGE_VERSION" = "$MANIFEST_VERSION"
+          test "$PACKAGE_VERSION" = "$MANIFEST_PACKAGE_VERSION"
       - name: Publish to npm (Trusted Publishing + provenance)
         env:
           # For Trusted Publishing with provenance, do NOT set NODE_AUTH_TOKEN.
@@ -47,3 +54,11 @@ jobs:
         run: |
           # Best practice: rebuild from source at the tagged commit; do not rely on GitHub release assets.
           npm publish --provenance --access public
+      - name: Install MCP Publisher CLI
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/download/v1.0.0/mcp-publisher_1.0.0_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
+            | tar xz mcp-publisher
+      - name: Login to MCP Registry (GitHub OIDC)
+        run: ./mcp-publisher login github-oidc
+      - name: Publish server manifest to MCP Registry
+        run: ./mcp-publisher publish
