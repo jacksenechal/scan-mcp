@@ -13,6 +13,8 @@
 
 Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly.
 
+## Features
+
 - Small, typed MCP server exposing tools for device discovery and scan jobs
 - JSON Schema–validated inputs with deterministic, typed outputs
 - Smart device selection (prefers ADF/duplex, avoids camera backends), robust defaults
@@ -65,15 +67,60 @@ Add a server entry to your MCP client configuration:
 - `SCAN_PREFER_BACKENDS` (CSV): preferred backends (e.g., `epjitsu,epson2`).
 - `PERSIST_LAST_USED_DEVICE` (default: `true`): persist and lightly prefer last used device.
 
-## Tools
+## API
 
-- `list_devices`: Discover connected scanners with backend details.
-- `get_device_options`: Probe options for a given `device_id`.
-- `start_scan_job`: Start a job (auto-selects device if omitted). Creates per-page TIFFs, assembles documents.
-- `get_job_status`: Inspect job state and artifact paths.
-- `cancel_job`: Request job cancellation (best-effort during scan loops).
+### Tools
 
-See JSON Schemas in `schemas/` for shapes of inputs/outputs. Tests assert against these contracts.
+- **list_devices**
+  - Discover connected scanners with backend details.
+  - Inputs: none.
+
+- **get_device_options**
+  - Get SANE options for a specific device.
+  - Inputs:
+    - `device_id` (string): Target device identifier.
+
+- **start_scan_job**
+  - Begin a scanning job; omitting `device_id` triggers auto-selection and default options.
+  - Inputs (all optional unless noted):
+    - `device_id` (string)
+    - `resolution_dpi` (integer, 50–1200)
+    - `color_mode` (`Color` | `Gray` | `Lineart`)
+    - `source` (`Flatbed` | `ADF` | `ADF Duplex`)
+    - `duplex` (boolean)
+    - `page_size` (`Letter` | `A4` | `Legal` | `Custom`)
+    - `custom_size_mm` { `width`, `height` }
+    - `doc_break_policy` { `type`, `blank_threshold`, `page_count`, `timer_ms`, `barcode_values` }
+    - `output_format` (string, default `tiff`)
+    - `tmp_dir` (string)
+
+- **get_job_status**
+  - Inspect job state and artifact counts.
+  - Inputs:
+    - `job_id` (string)
+
+- **cancel_job**
+  - Request job cancellation; best effort during scan loops.
+  - Inputs:
+    - `job_id` (string)
+
+- **list_jobs**
+  - List recent jobs from the inbox directory.
+  - Inputs (optional):
+    - `limit` (integer, max 100)
+    - `state` (`running` | `completed` | `cancelled` | `error` | `unknown`)
+
+- **get_manifest**
+  - Fetch a job's `manifest.json`.
+  - Inputs:
+    - `job_id` (string)
+
+- **get_events**
+  - Retrieve a job's `events.jsonl` log.
+  - Inputs:
+    - `job_id` (string)
+
+See JSON Schemas in `schemas/` for input shapes. Tests assert against these contracts.
 
 ## How Selection and Defaults Work
 
