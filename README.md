@@ -101,7 +101,3 @@ Defaults aim for 300dpi, reasonable color mode, and ADF/duplex when available. F
 ## Roadmap
 
 Tracking ideas and future improvements are documented in `docs/ROADMAP.md`.
-
----
-
-[![lobehub badge](https://lobehub.com/badge/mcp/jacksenechal-scan-mcp?style=flat)](https://lobehub.com/mcp/jacksenechal-scan-mcp)
