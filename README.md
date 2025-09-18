@@ -30,7 +30,10 @@ Add a server entry to your MCP client configuration:
   "mcpServers": {
     "scan": {
       "command": "npx",
-      "args": ["scan-mcp"],
+      "args": [
+        "-y",
+        "scan-mcp"
+      ],
       "env": {
         "INBOX_DIR": "~/Documents/scanned_documents/inbox"
       }
@@ -44,13 +47,14 @@ Add a server entry to your MCP client configuration:
 
 ## Install
 
-- Run with npx: `npx scan-mcp`
+- Run with npx: `npx scan-mcp` (recommended)
+  - The CLI runs a quick preflight check for Node 22+ and required scanner/image tools and prints installation hints if anything is missing.
+  - See recommended server config above
 - CLI help: `scan-mcp --help`
-- Install npm: `npm i -g scan-mcp` then `scan-mcp`
-- From source (development):
+- From source (for development):
   - `npm install`
   - `npm run build`
-  - MCP clients can run via `node dist/mcp.js` or `npx tsx src/mcp.ts`
+- For Cline setup, and other automated agentic installation, see [llms-install.md](llms-install.md)
 
 ## System Requirements
 
@@ -144,7 +148,3 @@ Defaults aim for 300dpi, reasonable color mode, and ADF/duplex when available. F
 ## Roadmap
 
 Tracking ideas and future improvements are documented in `docs/ROADMAP.md`.
-
----
-
-[![lobehub badge](https://lobehub.com/badge/mcp/jacksenechal-scan-mcp?style=flat)](https://lobehub.com/mcp/jacksenechal-scan-mcp)

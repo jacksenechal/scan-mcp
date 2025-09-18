@@ -50,10 +50,42 @@ if (wantsVersion) {
   process.exit(0);
 }
 
-// Load and run the built entrypoint from dist
-import('../dist/mcp.js')
-  .then((mod) => (typeof mod.main === 'function' ? mod.main() : undefined))
-  .catch((err) => {
-    console.error(err);
+async function bootstrap() {
+  try {
+    const preflight = await import('../dist/preflight.js');
+    if (typeof preflight.ensureEnvironmentReady === 'function') {
+      try {
+        await preflight.ensureEnvironmentReady();
+      } catch (error) {
+        if (preflight.PreflightError && error instanceof preflight.PreflightError) {
+          console.error(error.message);
+          process.exit(1);
+          return;
+        }
+        throw error;
+      }
+    }
+  } catch (error) {
+    console.error(error);
     process.exit(1);
-  });
+    return;
+  }
+
+  try {
+    const mod = await import('../dist/mcp.js');
+    if (typeof mod.main !== 'function') {
+      console.error('scan-mcp entrypoint missing main() export');
+      process.exit(1);
+      return;
+    }
+    await mod.main();
+  } catch (error) {
+    console.error(error);
+    process.exit(1);
+  }
+}
+
+bootstrap().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
