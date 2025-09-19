@@ -50,27 +50,6 @@ Key details:
 - Set `SCAN_MOCK=true` in the `env` block when running on a machine without SANE devices.
 - Additional overrides such as `SCANIMAGE_BIN`, `TIFFCP_BIN`, or `SCAN_PREFER_BACKENDS` can also be supplied inside the same `env` object when needed.
 
-### Streamable HTTP transport
-
-When the scanner is attached to another machine (for example a Raspberry Pi on your local network), start the server with `npx
-scan-mcp --http` on that host and point your MCP client at `http://<hostname>:3001/mcp`. Claude Desktop accepts a block like:
-
-```json
-{
-  "mcpServers": {
-    "scan-remote": {
-      "transport": {
-        "type": "http",
-        "url": "http://raspberrypi.local:3001/mcp"
-      }
-    }
-  }
-}
-```
-
-This keeps the workflow local-first: capture happens on the detached machine, and your desktop communicates directly with it ov
-er your LAN without passing data through third-party services.
-
 ## Verification Steps
 
 1. Ensure the inbox directory exists and is writable.
