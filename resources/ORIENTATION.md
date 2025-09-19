@@ -75,6 +75,11 @@ After `start_scan_job`, you receive `{ job_id, run_dir, state }`.
   - `events.jsonl`: chronological events (e.g., `job_started`, `scanner_exec`, `job_completed`).
   - `page_0001.tiff`, `page_0002.tiff`, …: raw captured pages.
   - `doc_0001.tiff` (and/or assembled outputs when configured): multipage artifacts.
+- Prefer MCP resource URIs to share artifacts with other tools:
+  - Manifest JSON: `mcp://scan-mcp/jobs/{job_id}/manifest`
+  - Events log: `mcp://scan-mcp/jobs/{job_id}/events`
+  - Individual page TIFF: `mcp://scan-mcp/jobs/{job_id}/page/{page_index}`
+  - Assembled document TIFF: `mcp://scan-mcp/jobs/{job_id}/document/{document_index}`
 - A typical events sequence includes:
   - `job_started` → `scanner_exec` → (optional `scanner_failed` on retries) → `job_completed`.
 

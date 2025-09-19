@@ -65,6 +65,12 @@ describe("integration tests", () => {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     expect(manifest.pages.length).toBeGreaterThan(0);
     expect(manifest.documents.length).toBeGreaterThan(0);
+    expect(manifest.pages[0].uri).toMatch(/^mcp:\/\/scan-mcp\/jobs\//);
+    expect(manifest.pages[0].mime_type).toBe("image/tiff");
+    expect(manifest.pages[0].path).toBeUndefined();
+    expect(manifest.documents[0].uri).toMatch(/^mcp:\/\/scan-mcp\/jobs\//);
+    expect(manifest.documents[0].mime_type).toBe("image/tiff");
+    expect(manifest.documents[0].path).toBeUndefined();
 
     // Verify job status
     const status = await getJobStatus(job_id, ctx);
