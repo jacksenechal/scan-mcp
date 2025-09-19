@@ -63,7 +63,6 @@ describe("registerScanServer", () => {
         "list_jobs",
         "get_manifest",
         "get_events",
-        "Start Here for ScanServerOrientation",
       ])
     );
     const resources = Object.keys(internal._registeredResourceTemplates);
