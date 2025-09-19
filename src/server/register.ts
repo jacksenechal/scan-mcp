@@ -15,6 +15,10 @@ const orientationUri = "mcp://scan-mcp/orientation";
 const orientationText = await fs.readFile(orientationPath, "utf8");
 const orientationLastModified = (await fs.stat(orientationPath)).mtime.toISOString();
 
+const MANIFEST_MIME_TYPE = "application/json";
+const EVENTS_MIME_TYPE = "application/x-ndjson";
+const TIFF_MIME_TYPE = "image/tiff";
+
 export function registerScanServer(server: McpServer, ctx: AppContext) {
 
   // Tools
@@ -176,30 +180,88 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     })
   );
 
-  const manifestTemplate = new ResourceTemplate("scan://jobs/{job_id}/manifest", { list: undefined });
+  const manifestTemplate = new ResourceTemplate("mcp://scan-mcp/jobs/{job_id}/manifest", { list: undefined });
   server.resource(
     "manifest",
     manifestTemplate,
-    async (_uri, variables) => {
+    {
+      title: "Scan job manifest",
+      description: "Manifest JSON for a scan job",
+      mimeType: MANIFEST_MIME_TYPE,
+    },
+    async (uri, variables) => {
       const jobId = z.string().parse(variables.job_id);
       const runDir = resolveJobPath(jobId, ctx.config.INBOX_DIR);
       const p = path.join(runDir, "manifest.json");
       const txt = await fsSafeRead(p);
-      if (txt) return { contents: [{ uri: `file://${p}`, text: txt }] };
+      if (txt) {
+        return { contents: [{ uri: uri.href, text: txt, mimeType: MANIFEST_MIME_TYPE }] };
+      }
       return { contents: [], isError: true };
     }
   );
 
-const eventsTemplate = new ResourceTemplate("scan://jobs/{job_id}/events", { list: undefined });
+  const eventsTemplate = new ResourceTemplate("mcp://scan-mcp/jobs/{job_id}/events", { list: undefined });
   server.resource(
     "events",
     eventsTemplate,
-    async (_uri, variables) => {
+    {
+      title: "Scan job events",
+      description: "Chronological events for a scan job",
+      mimeType: EVENTS_MIME_TYPE,
+    },
+    async (uri, variables) => {
       const jobId = z.string().parse(variables.job_id);
       const runDir = resolveJobPath(jobId, ctx.config.INBOX_DIR);
       const p = path.join(runDir, "events.jsonl");
       const txt = await fsSafeRead(p);
-      if (txt) return { contents: [{ uri: `file://${p}`, text: txt }] };
+      if (txt) {
+        return { contents: [{ uri: uri.href, text: txt, mimeType: EVENTS_MIME_TYPE }] };
+      }
+      return { contents: [], isError: true };
+    }
+  );
+
+  const pageTemplate = new ResourceTemplate("mcp://scan-mcp/jobs/{job_id}/page/{page_index}", { list: undefined });
+  server.resource(
+    "job_page",
+    pageTemplate,
+    {
+      title: "Scan job page",
+      description: "Single-page TIFF captured during a scan job",
+      mimeType: TIFF_MIME_TYPE,
+    },
+    async (uri, variables) => {
+      const jobId = z.string().parse(variables.job_id);
+      const pageIndex = z.coerce.number().int().positive().parse(variables.page_index);
+      const runDir = resolveJobPath(jobId, ctx.config.INBOX_DIR);
+      const p = path.join(runDir, `page_${padIndex(pageIndex)}.tiff`);
+      const buf = await fsSafeReadBuffer(p);
+      if (buf) {
+        return { contents: [{ uri: uri.href, mimeType: TIFF_MIME_TYPE, blob: buf.toString("base64") }] };
+      }
+      return { contents: [], isError: true };
+    }
+  );
+
+  const documentTemplate = new ResourceTemplate("mcp://scan-mcp/jobs/{job_id}/document/{document_index}", { list: undefined });
+  server.resource(
+    "job_document",
+    documentTemplate,
+    {
+      title: "Scan job document",
+      description: "Assembled TIFF document for a scan job",
+      mimeType: TIFF_MIME_TYPE,
+    },
+    async (uri, variables) => {
+      const jobId = z.string().parse(variables.job_id);
+      const documentIndex = z.coerce.number().int().positive().parse(variables.document_index);
+      const runDir = resolveJobPath(jobId, ctx.config.INBOX_DIR);
+      const p = path.join(runDir, `doc_${padIndex(documentIndex)}.tiff`);
+      const buf = await fsSafeReadBuffer(p);
+      if (buf) {
+        return { contents: [{ uri: uri.href, mimeType: TIFF_MIME_TYPE, blob: buf.toString("base64") }] };
+      }
       return { contents: [], isError: true };
     }
   );
@@ -208,6 +270,18 @@ const eventsTemplate = new ResourceTemplate("scan://jobs/{job_id}/events", { lis
 async function fsSafeRead(p: string): Promise<string | null> {
   try {
     return await fs.readFile(p, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function padIndex(n: number): string {
+  return String(n).padStart(4, "0");
+}
+
+async function fsSafeReadBuffer(p: string): Promise<Buffer | null> {
+  try {
+    return await fs.readFile(p);
   } catch {
     return null;
   }

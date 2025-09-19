@@ -39,15 +39,44 @@ export type StartScanResult = {
   state: "running" | "completed" | "cancelled" | "error";
 };
 
+type ManifestPage = {
+  index: number;
+  uri: string;
+  sha256: string;
+  mime_type: string;
+};
+
+type ManifestDocument = {
+  index: number;
+  pages: number[];
+  uri: string;
+  sha256: string;
+  mime_type: string;
+};
+
 type Manifest = {
   job_id: string;
   device_id: string | null;
   created_at: string;
   params: StartScanInput;
-  pages: { index: number; path: string; sha256: string }[];
-  documents: { index: number; pages: number[]; path: string; sha256: string }[];
+  pages: ManifestPage[];
+  documents: ManifestDocument[];
   state: "running" | "completed" | "cancelled" | "error";
 };
+
+const TIFF_MIME_TYPE = "image/tiff";
+
+function jobResourceBase(jobId: string): string {
+  return `mcp://scan-mcp/jobs/${jobId}`;
+}
+
+function pageResourceUri(jobId: string, pageIndex: number): string {
+  return `${jobResourceBase(jobId)}/page/${pageIndex}`;
+}
+
+function documentResourceUri(jobId: string, documentIndex: number): string {
+  return `${jobResourceBase(jobId)}/document/${documentIndex}`;
+}
 
 async function initializeJob(input: StartScanInput, ctx: AppContext): Promise<{ runDir: string; manifest: Manifest; eventsPath: string }> {
   const effective = await resolveEffectiveInput(input, ctx);
@@ -162,19 +191,34 @@ async function processPages(runDir: string, manifest: Manifest, ctx: AppContext)
   const { config } = ctx;
   const entries = await fs.readdir(runDir);
   const pageFiles = entries.filter((f) => f.startsWith("page_") && f.endsWith(".tiff")).sort();
+  const pagePaths = new Map<number, string>();
+
   for (let idx = 0; idx < pageFiles.length; idx++) {
     const f = pageFiles[idx];
     const p = path.join(runDir, f);
-    manifest.pages.push({ index: idx + 1, path: p, sha256: await hashFile(p) });
+    const pageIndex = idx + 1;
+    manifest.pages.push({
+      index: pageIndex,
+      uri: pageResourceUri(manifest.job_id, pageIndex),
+      sha256: await hashFile(p),
+      mime_type: TIFF_MIME_TYPE,
+    });
+    pagePaths.set(pageIndex, p);
   }
 
   const segments = segmentPages(manifest.pages.map((p) => p.index), manifest.params.doc_break_policy);
   let docIdx = 1;
   for (const seg of segments) {
     const outDoc = path.join(runDir, `doc_${String(docIdx).padStart(4, "0")}.tiff`);
-    const segFiles = seg.map((i) => manifest.pages[i - 1]?.path).filter(Boolean) as string[];
+    const segFiles = seg.map((i) => pagePaths.get(i)).filter((v): v is string => Boolean(v));
     await assembleTiff(segFiles, outDoc, config);
-    manifest.documents.push({ index: docIdx, pages: seg, path: outDoc, sha256: await hashFile(outDoc) });
+    manifest.documents.push({
+      index: docIdx,
+      pages: seg,
+      uri: documentResourceUri(manifest.job_id, docIdx),
+      sha256: await hashFile(outDoc),
+      mime_type: TIFF_MIME_TYPE,
+    });
     docIdx++;
   }
 }
