@@ -119,19 +119,6 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     }
   );
 
-  server.tool(
-    "Start Here for ScanServerOrientation",
-    "Compatibility fallback: returns full orientation document; prefer resources and prompts",
-    async () => ({
-      content: [
-        {
-          type: "text",
-          text: `URI: ${orientationUri}\n\n${orientationText}`,
-        },
-      ],
-    })
-  );
-
   server.prompt(
     "bootstrap_context",
     "Initialize Context",
