@@ -46,12 +46,18 @@ export interface EnsureEnvironmentOptions {
   nodeVersion?: string;
   config?: AppConfig;
   skipCommandCheck?: boolean;
+  verbose?: boolean;
 }
 
 export function ensureEnvironmentReady(options: EnsureEnvironmentOptions = {}): void {
   const nodeVersion = options.nodeVersion ?? process.version;
   const majorVersion = parseNodeMajor(nodeVersion);
+  const verbose = options.verbose ?? false;
+
   if (!majorVersion || majorVersion < MIN_NODE_MAJOR_VERSION) {
+    if (verbose) {
+      console.log(`✗ Node.js version check (${formatNodeVersion(nodeVersion)} < v${MIN_NODE_MAJOR_VERSION})`);
+    }
     const message = [
       `scan-mcp requires Node.js ${MIN_NODE_MAJOR_VERSION} or newer (current: ${formatNodeVersion(nodeVersion)}).`,
       "Update your runtime before running `npx scan-mcp`.",
@@ -66,10 +72,32 @@ export function ensureEnvironmentReady(options: EnsureEnvironmentOptions = {}): 
     });
   }
 
-  if (options.skipCommandCheck) return;
+  if (verbose) {
+    console.log(`✓ Node.js version check (${formatNodeVersion(nodeVersion)})`);
+  }
+
+  if (options.skipCommandCheck) {
+    if (verbose) {
+      console.log("\n✓ All preflight checks passed!");
+    }
+    return;
+  }
 
   const config = options.config ?? loadConfig();
   const missing = detectMissingDependencies(config);
+
+  if (verbose) {
+    // Check each tool individually for detailed output
+    for (const tool of REQUIRED_TOOLS) {
+      const isMissing = missing.some(m => m.envVar === tool.envVar);
+      if (isMissing) {
+        console.log(`✗ ${tool.description}`);
+      } else {
+        console.log(`✓ ${tool.description}`);
+      }
+    }
+  }
+
   if (missing.length > 0) {
     const message = [
       "scan-mcp could not find the system tools it needs to talk to your scanner:",
@@ -85,6 +113,10 @@ export function ensureEnvironmentReady(options: EnsureEnvironmentOptions = {}): 
       "If the tools live elsewhere, set SCANIMAGE_BIN, TIFFCP_BIN, or IM_CONVERT_BIN to point at them.",
     ].join("\n");
     throw new PreflightError(message, { type: "missing-dependencies", missing });
+  }
+
+  if (verbose) {
+    console.log("All preflight checks passed!");
   }
 }
 

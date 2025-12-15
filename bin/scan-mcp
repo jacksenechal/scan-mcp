@@ -8,6 +8,7 @@ const args = process.argv.slice(2);
 function parseArgs(rawArgs) {
   let wantsHelp = false;
   let wantsVersion = false;
+  let wantsPreflightOnly = false;
   let transport = 'stdio';
 
   const parseTransport = (value) => {
@@ -25,6 +26,10 @@ function parseArgs(rawArgs) {
     }
     if (arg === '-v' || arg === '--version' || arg === 'version') {
       wantsVersion = true;
+      continue;
+    }
+    if (arg === '--preflight-only') {
+      wantsPreflightOnly = true;
       continue;
     }
     if (arg === '--http') {
@@ -51,7 +56,7 @@ function parseArgs(rawArgs) {
     }
   }
 
-  return { wantsHelp, wantsVersion, transport };
+  return { wantsHelp, wantsVersion, wantsPreflightOnly, transport };
 }
 
 let parsed;
@@ -62,7 +67,7 @@ try {
   process.exit(1);
 }
 
-const { wantsHelp, wantsVersion, transport } = parsed;
+const { wantsHelp, wantsVersion, wantsPreflightOnly, transport } = parsed;
 
 const version = (pkg && pkg.version) || process.env.npm_package_version || 'unknown';
 
@@ -73,6 +78,7 @@ scan-mcp v${version}
 Usage:
   scan-mcp [--transport <stdio|http>]
   scan-mcp --http
+  scan-mcp --preflight-only
   scan-mcp --help
   scan-mcp --version
 
@@ -83,6 +89,11 @@ Description:
 Transports:
   stdio (default)          Direct stdio bridge for local MCP clients.
   http                     Streamable HTTP/SSE server (set MCP_HTTP_PORT to change the port, default 3001).
+
+Options:
+  --help            Show this help message
+  --version         Show version number
+  --preflight-only  Run preflight checks only and exit
 
 Environment:
   SCAN_MOCK                Mock SANE; generate fake TIFFs (default: false)
@@ -119,53 +130,80 @@ if (wantsVersion) {
   process.exit(0);
 }
 
-async function bootstrap() {
-  try {
-    const preflight = await import('../dist/preflight.js');
-    if (typeof preflight.ensureEnvironmentReady === 'function') {
-      try {
-        await preflight.ensureEnvironmentReady();
-      } catch (error) {
-        if (preflight.PreflightError && error instanceof preflight.PreflightError) {
-          console.error(error.message);
-          process.exit(1);
-          return;
-        }
-        throw error;
-      }
-    }
-  } catch (error) {
-    console.error(error);
-    process.exit(1);
-    return;
-  }
-
-  try {
-    if (transport === 'http') {
-      const mod = await import('../dist/http-server.js');
-      if (typeof mod.startHttpServer !== 'function') {
-        console.error('scan-mcp HTTP entrypoint missing startHttpServer() export');
+if (wantsPreflightOnly) {
+  (async () => {
+    try {
+      const preflight = await import('../dist/preflight.js');
+      if (typeof preflight.ensureEnvironmentReady === 'function') {
+        await preflight.ensureEnvironmentReady({ verbose: true });
+        process.exit(0);
+      } else {
+        console.error('Preflight module not available');
         process.exit(1);
-        return;
       }
-      mod.startHttpServer();
-      return;
+    } catch (error) {
+      const preflight = await import('../dist/preflight.js');
+      if (preflight.PreflightError && error instanceof preflight.PreflightError) {
+        console.error(error.message);
+        process.exit(1);
+      }
+      console.error(error);
+      process.exit(1);
     }
-
-    const mod = await import('../dist/mcp.js');
-    if (typeof mod.main !== 'function') {
-      console.error('scan-mcp entrypoint missing main() export');
+  })().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+  // The IIFE above will handle the exit, preventing bootstrap from running
+} else {
+  async function bootstrap() {
+    try {
+      const preflight = await import('../dist/preflight.js');
+      if (typeof preflight.ensureEnvironmentReady === 'function') {
+        try {
+          await preflight.ensureEnvironmentReady();
+        } catch (error) {
+          if (preflight.PreflightError && error instanceof preflight.PreflightError) {
+            console.error(error.message);
+            process.exit(1);
+            return;
+          }
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.error(error);
       process.exit(1);
       return;
     }
-    await mod.main();
-  } catch (error) {
-    console.error(error);
-    process.exit(1);
-  }
-}
 
-bootstrap().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+    try {
+      if (transport === 'http') {
+        const mod = await import('../dist/http-server.js');
+        if (typeof mod.startHttpServer !== 'function') {
+          console.error('scan-mcp HTTP entrypoint missing startHttpServer() export');
+          process.exit(1);
+          return;
+        }
+        mod.startHttpServer();
+        return;
+      }
+
+      const mod = await import('../dist/mcp.js');
+      if (typeof mod.main !== 'function') {
+        console.error('scan-mcp entrypoint missing main() export');
+        process.exit(1);
+        return;
+      }
+      await mod.main();
+    } catch (error) {
+      console.error(error);
+      process.exit(1);
+    }
+  }
+
+  bootstrap().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
