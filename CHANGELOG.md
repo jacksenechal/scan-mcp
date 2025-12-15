@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0](https://github.com/jacksenechal/scan-mcp/compare/v0.2.0...v0.3.0) (2025-12-15)
+## [0.2.1](https://github.com/jacksenechal/scan-mcp/compare/v0.2.0...v0.2.1) (2025-12-15)
 
 
 ### Features
