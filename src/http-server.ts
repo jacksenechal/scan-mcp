@@ -3,7 +3,6 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import type { IncomingMessage, ServerResponse, Server as HttpServer } from "node:http";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createLogger, maskAuthHeaders } from "./server/logger.js";
@@ -14,9 +13,7 @@ import pkg from "../package.json" with { type: "json" };
 
 const version = pkg.version as string;
 
-type SseSession = { server: McpServer; transport: SSEServerTransport };
-
-export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: boolean } = {}): HttpServer {
+export function startHttpServer(opts: { enableStreamable?: boolean } = {}): HttpServer {
   const config = loadConfig();
   const logger = createLogger("http", config.LOG_LEVEL);
   const ctx: AppContext = { config, logger };
@@ -50,9 +47,7 @@ export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: 
     return undefined;
   }
 
-  const sseSessions: Record<string, SseSession> = {};
   const enableStreamable = opts.enableStreamable !== false; // default true
-  const enableSse = opts.enableSse !== false; // default true
 
   // Streamable HTTP (stateless)
   if (enableStreamable) {
@@ -84,39 +79,9 @@ export function startHttpServer(opts: { enableStreamable?: boolean; enableSse?: 
     });
   }
 
-  // SSE (stateful)
-  if (enableSse) {
-    app.get("/sse", async (_req: Request, res: Response) => {
-      const server = new McpServer({ name: "scan-mcp", version }, { capabilities: { tools: {}, resources: {} } });
-      registerScanServer(server, ctx);
-      const transport = new SSEServerTransport("/messages", res as unknown as ServerResponse);
-      sseSessions[transport.sessionId] = { server, transport };
-      res.on("close", () => { delete sseSessions[transport.sessionId]; });
-      await server.connect(transport);
-      logger.info({ sessionId: transport.sessionId }, "SSE session started");
-    });
-
-    app.post("/messages", async (req: Request, res: Response) => {
-      const sessionId = String(req.query.sessionId ?? "");
-      const session = sseSessions[sessionId];
-      if (!session) {
-        logger.warn({ sessionId }, "SSE POST with unknown sessionId");
-        return res.status(400).send("No transport found for sessionId");
-      }
-      const payload = (req as unknown as { body?: unknown }).body;
-      const rpc = summarizeRpc(payload);
-      logger.debug({ sessionId, rpc }, "sse message");
-      await session.transport.handlePostMessage(
-        req as unknown as IncomingMessage & { auth?: AuthInfo },
-        res as unknown as ServerResponse,
-        (req as unknown as { body?: unknown }).body
-      );
-    });
-  }
-
   const port = Number(process.env.MCP_HTTP_PORT || 3001);
   const server = app.listen(port, "::", () => {
-    logger.info({ port, enableStreamable, enableSse }, "scan-mcp HTTP server ready");
+    logger.info({ port, enableStreamable }, "scan-mcp HTTP server ready");
   });
   return server;
 }

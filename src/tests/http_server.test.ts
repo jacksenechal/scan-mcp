@@ -46,14 +46,4 @@ describe("http server", () => {
     expect(text).toMatch(/Method not allowed/);
   });
 
-  it("rejects unknown SSE session", async () => {
-    const response = await fetch(`${baseUrl}/messages?sessionId=none`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: "{}",
-    });
-    expect(response.status).toBe(400);
-    const text = await response.text();
-    expect(text).toBe("No transport found for sessionId");
-  });
 });

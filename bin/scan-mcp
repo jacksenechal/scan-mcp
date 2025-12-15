@@ -4,9 +4,70 @@
 import pkg from '../package.json' with { type: 'json' };
 
 const args = process.argv.slice(2);
-const wantsHelp = args.includes('-h') || args.includes('--help') || args.includes('help');
-const wantsVersion = args.includes('-v') || args.includes('--version') || args.includes('version');
-const wantsPreflightOnly = args.includes('--preflight-only');
+
+function parseArgs(rawArgs) {
+  let wantsHelp = false;
+  let wantsVersion = false;
+  let wantsPreflightOnly = false;
+  let transport = 'stdio';
+
+  const parseTransport = (value) => {
+    const normalized = String(value || '').toLowerCase();
+    if (normalized === 'stdio') return 'stdio';
+    if (normalized === 'http' || normalized === 'streamable-http') return 'http';
+    throw new Error(`Unknown transport '${value}'. Supported transports: stdio, http.`);
+  };
+
+  for (let i = 0; i < rawArgs.length; i += 1) {
+    const arg = rawArgs[i];
+    if (arg === '-h' || arg === '--help' || arg === 'help') {
+      wantsHelp = true;
+      continue;
+    }
+    if (arg === '-v' || arg === '--version' || arg === 'version') {
+      wantsVersion = true;
+      continue;
+    }
+    if (arg === '--preflight-only') {
+      wantsPreflightOnly = true;
+      continue;
+    }
+    if (arg === '--http') {
+      transport = 'http';
+      continue;
+    }
+    if (arg === '--stdio') {
+      transport = 'stdio';
+      continue;
+    }
+    if (arg === '--transport') {
+      const value = rawArgs[i + 1];
+      if (!value) {
+        throw new Error('Missing value for --transport.');
+      }
+      transport = parseTransport(value);
+      i += 1;
+      continue;
+    }
+    if (arg && arg.startsWith('--transport=')) {
+      const value = arg.slice('--transport='.length);
+      transport = parseTransport(value);
+      continue;
+    }
+  }
+
+  return { wantsHelp, wantsVersion, wantsPreflightOnly, transport };
+}
+
+let parsed;
+try {
+  parsed = parseArgs(args);
+} catch (error) {
+  console.error(String(error instanceof Error ? error.message : error));
+  process.exit(1);
+}
+
+const { wantsHelp, wantsVersion, wantsPreflightOnly, transport } = parsed;
 
 const version = (pkg && pkg.version) || process.env.npm_package_version || 'unknown';
 
@@ -15,10 +76,19 @@ if (wantsHelp) {
 scan-mcp v${version}
 
 Usage:
-  scan-mcp [--help] [--version] [--preflight-only]
+  scan-mcp [--transport <stdio|http>]
+  scan-mcp --http
+  scan-mcp --preflight-only
+  scan-mcp --help
+  scan-mcp --version
 
 Description:
   Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly.
+  Default transport is stdio for local-first, privacy-first operation. Use --http for a streamable HTTP server.
+
+Transports:
+  stdio (default)          Direct stdio bridge for local MCP clients.
+  http                     Streamable HTTP/SSE server (set MCP_HTTP_PORT to change the port, default 3001).
 
 Options:
   --help            Show this help message
@@ -35,12 +105,16 @@ Environment:
   SCAN_EXCLUDE_BACKENDS    CSV backends to exclude (e.g., v4l)
   SCAN_PREFER_BACKENDS     CSV backends to prefer (e.g., epjitsu,epson2)
   PERSIST_LAST_USED_DEVICE Persist and prefer last used device (default: true)
+  MCP_HTTP_PORT            TCP port when using --http (default: 3001)
 
 Examples:
-  # Run directly
+  # Run locally over stdio (default)
   scan-mcp
 
-  # Via npx in MCP client config
+  # Start the HTTP transport on port 3333
+  MCP_HTTP_PORT=3333 scan-mcp --http
+
+  # Via npx in MCP client config (stdio)
   {
     "mcpServers": {
       "scan": { "command": "npx", "args": ["scan-mcp"] }
@@ -104,6 +178,17 @@ if (wantsPreflightOnly) {
     }
 
     try {
+      if (transport === 'http') {
+        const mod = await import('../dist/http-server.js');
+        if (typeof mod.startHttpServer !== 'function') {
+          console.error('scan-mcp HTTP entrypoint missing startHttpServer() export');
+          process.exit(1);
+          return;
+        }
+        mod.startHttpServer();
+        return;
+      }
+
       const mod = await import('../dist/mcp.js');
       if (typeof mod.main !== 'function') {
         console.error('scan-mcp entrypoint missing main() export');
