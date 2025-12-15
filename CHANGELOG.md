@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.1](https://github.com/jacksenechal/scan-mcp/compare/v0.2.0...v0.2.1) (2025-12-15)
+
+
+### Features
+
+* add Claude Code skills for scan-mcp ([#32](https://github.com/jacksenechal/scan-mcp/issues/32)) ([33070b9](https://github.com/jacksenechal/scan-mcp/commit/33070b95ca64d7d2642b9ccdf630a298ab675563))
+* expose HTTP transport from CLI ([#26](https://github.com/jacksenechal/scan-mcp/issues/26)) ([b4dfb33](https://github.com/jacksenechal/scan-mcp/commit/b4dfb331adbc7cd8f46432dd40d1bfc9633fb309))
+
+
+### Bug Fixes
+
+* remove orientation fallback tool ([#28](https://github.com/jacksenechal/scan-mcp/issues/28)) ([d4348a5](https://github.com/jacksenechal/scan-mcp/commit/d4348a5278550fbbc03f088c8178eed4960a3f78))
+
 ## [0.2.0](https://github.com/jacksenechal/scan-mcp/compare/v0.1.1...v0.2.0) (2025-09-16)
 
 
