@@ -6,6 +6,7 @@ import pkg from '../package.json' with { type: 'json' };
 const args = process.argv.slice(2);
 const wantsHelp = args.includes('-h') || args.includes('--help') || args.includes('help');
 const wantsVersion = args.includes('-v') || args.includes('--version') || args.includes('version');
+const wantsPreflightOnly = args.includes('--preflight-only');
 
 const version = (pkg && pkg.version) || process.env.npm_package_version || 'unknown';
 
@@ -14,10 +15,15 @@ if (wantsHelp) {
 scan-mcp v${version}
 
 Usage:
-  scan-mcp [--help]
+  scan-mcp [--help] [--version] [--preflight-only]
 
 Description:
   Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and multipage assembly.
+
+Options:
+  --help            Show this help message
+  --version         Show version number
+  --preflight-only  Run preflight checks only and exit
 
 Environment:
   SCAN_MOCK                Mock SANE; generate fake TIFFs (default: false)
@@ -50,42 +56,69 @@ if (wantsVersion) {
   process.exit(0);
 }
 
-async function bootstrap() {
-  try {
-    const preflight = await import('../dist/preflight.js');
-    if (typeof preflight.ensureEnvironmentReady === 'function') {
-      try {
-        await preflight.ensureEnvironmentReady();
-      } catch (error) {
-        if (preflight.PreflightError && error instanceof preflight.PreflightError) {
-          console.error(error.message);
-          process.exit(1);
-          return;
-        }
-        throw error;
+if (wantsPreflightOnly) {
+  (async () => {
+    try {
+      const preflight = await import('../dist/preflight.js');
+      if (typeof preflight.ensureEnvironmentReady === 'function') {
+        await preflight.ensureEnvironmentReady({ verbose: true });
+        process.exit(0);
+      } else {
+        console.error('Preflight module not available');
+        process.exit(1);
       }
+    } catch (error) {
+      const preflight = await import('../dist/preflight.js');
+      if (preflight.PreflightError && error instanceof preflight.PreflightError) {
+        console.error(error.message);
+        process.exit(1);
+      }
+      console.error(error);
+      process.exit(1);
     }
-  } catch (error) {
-    console.error(error);
+  })().catch((err) => {
+    console.error(err);
     process.exit(1);
-    return;
-  }
-
-  try {
-    const mod = await import('../dist/mcp.js');
-    if (typeof mod.main !== 'function') {
-      console.error('scan-mcp entrypoint missing main() export');
+  });
+  // The IIFE above will handle the exit, preventing bootstrap from running
+} else {
+  async function bootstrap() {
+    try {
+      const preflight = await import('../dist/preflight.js');
+      if (typeof preflight.ensureEnvironmentReady === 'function') {
+        try {
+          await preflight.ensureEnvironmentReady();
+        } catch (error) {
+          if (preflight.PreflightError && error instanceof preflight.PreflightError) {
+            console.error(error.message);
+            process.exit(1);
+            return;
+          }
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.error(error);
       process.exit(1);
       return;
     }
-    await mod.main();
-  } catch (error) {
-    console.error(error);
-    process.exit(1);
-  }
-}
 
-bootstrap().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+    try {
+      const mod = await import('../dist/mcp.js');
+      if (typeof mod.main !== 'function') {
+        console.error('scan-mcp entrypoint missing main() export');
+        process.exit(1);
+        return;
+      }
+      await mod.main();
+    } catch (error) {
+      console.error(error);
+      process.exit(1);
+    }
+  }
+
+  bootstrap().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
