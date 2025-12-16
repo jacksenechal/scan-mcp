@@ -47,6 +47,19 @@ Add a server entry to your MCP client configuration:
 - Call `start_scan_job` without a `device_id` to auto-select a scanner and begin scanning.
 - Artifacts are written under `INBOX_DIR` per job: `job-*/page_*.tiff`, `doc_*.tiff`, `manifest.json`, `events.jsonl`.
 
+## MCP Resources
+
+Each scan job also publishes MCP resource URIs so clients can retrieve artifacts without direct filesystem access:
+
+- Manifest JSON: `mcp://scan-mcp/jobs/{job_id}/manifest`
+- Events log (NDJSON): `mcp://scan-mcp/jobs/{job_id}/events`
+- Individual page TIFF: `mcp://scan-mcp/jobs/{job_id}/page/{page_index}`
+- Assembled document TIFF: `mcp://scan-mcp/jobs/{job_id}/document/{document_index}`
+
+Use the MCP `read_resource` utility (or equivalent client API) to request these URIs. Text resources return UTF-8 JSON payloads,
+while page and document resources expose base64-encoded TIFF blobs (`mimeType: "image/tiff"`). Tool fallbacks (`get_manifest`,
+`get_events`) remain available for clients that do not support resources yet.
+
 ## Streamable HTTP transport
 
 Prefer to attach the scanner to another machine on your network? `scan-mcp` also supports the

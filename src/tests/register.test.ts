@@ -1,4 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vitest";
+import fs from "fs";
+import path from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerScanServer } from "../server/register.js";
 import type { AppConfig } from "../config.js";
@@ -6,9 +8,11 @@ import type { AppContext } from "../context.js";
 import type { Logger } from "pino";
 import { version } from "../mcp.js";
 
+const tmpInboxDir = path.resolve(__dirname, ".tmp-register-inbox");
+
 const baseConfig: AppConfig = {
   SCAN_MOCK: true,
-  INBOX_DIR: "/tmp/inbox",
+  INBOX_DIR: tmpInboxDir,
   LOG_LEVEL: "silent",
   SCAN_EXCLUDE_BACKENDS: [],
   SCAN_PREFER_BACKENDS: [],
@@ -20,6 +24,23 @@ const baseConfig: AppConfig = {
 
 const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
 const ctx: AppContext = { config: baseConfig, logger };
+
+beforeAll(() => {
+  fs.mkdirSync(tmpInboxDir, { recursive: true });
+});
+
+afterAll(() => {
+  try {
+    fs.rmSync(tmpInboxDir, { recursive: true, force: true });
+  } catch {}
+});
+
+beforeEach(() => {
+  if (fs.existsSync(tmpInboxDir)) {
+    fs.rmSync(tmpInboxDir, { recursive: true, force: true });
+  }
+  fs.mkdirSync(tmpInboxDir, { recursive: true });
+});
 
 describe("registerScanServer", () => {
   it("registers expected tools and resources", () => {
@@ -45,7 +66,9 @@ describe("registerScanServer", () => {
       ])
     );
     const resources = Object.keys(internal._registeredResourceTemplates);
-    expect(resources).toEqual(expect.arrayContaining(["manifest", "events"]));
+    expect(resources).toEqual(
+      expect.arrayContaining(["manifest", "events", "job_page", "job_document"])
+    );
     const staticResources = Object.keys(internal._registeredResources);
     expect(staticResources).toEqual(
       expect.arrayContaining(["mcp://scan-mcp/orientation"])
@@ -74,5 +97,37 @@ describe("registerScanServer", () => {
     };
     const tool = internal._registeredTools["get_manifest"];
     await expect(tool.callback({ job_id: "../etc/passwd" })).rejects.toThrow();
+  });
+
+  it("serves page and document resources as blobs", async () => {
+    const server = new McpServer({ name: "scan-mcp", version }, { capabilities: { tools: {}, resources: {} } });
+    registerScanServer(server, ctx);
+    const jobId = "job-00000000-0000-0000-0000-000000000123";
+    const runDir = path.join(tmpInboxDir, jobId);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, "page_0001.tiff"), "PAGE1");
+    fs.writeFileSync(path.join(runDir, "doc_0001.tiff"), "DOC1");
+
+    const internal = server as unknown as {
+      _registeredResourceTemplates: Record<string, { readCallback: (uri: URL, vars: Record<string, unknown>, extra: unknown) => Promise<{ contents: Array<{ blob?: string; mimeType?: string }>; isError?: boolean }> }>;
+    };
+
+    const pageCb = internal._registeredResourceTemplates["job_page"].readCallback;
+    const pageResult = await pageCb(
+      new URL(`mcp://scan-mcp/jobs/${jobId}/page/1`),
+      { job_id: jobId, page_index: "1" },
+      {}
+    );
+    expect(pageResult.contents[0].blob).toBe(Buffer.from("PAGE1").toString("base64"));
+    expect(pageResult.contents[0].mimeType).toBe("image/tiff");
+
+    const documentCb = internal._registeredResourceTemplates["job_document"].readCallback;
+    const docResult = await documentCb(
+      new URL(`mcp://scan-mcp/jobs/${jobId}/document/1`),
+      { job_id: jobId, document_index: "1" },
+      {}
+    );
+    expect(docResult.contents[0].blob).toBe(Buffer.from("DOC1").toString("base64"));
+    expect(docResult.contents[0].mimeType).toBe("image/tiff");
   });
 });
