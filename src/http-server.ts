@@ -80,8 +80,9 @@ export function startHttpServer(opts: { enableStreamable?: boolean } = {}): Http
   }
 
   const port = Number(process.env.MCP_HTTP_PORT || 3001);
-  const server = app.listen(port, "::", () => {
-    logger.info({ port, enableStreamable }, "scan-mcp HTTP server ready");
+  const host = process.env.MCP_HTTP_HOST || "::";
+  const server = app.listen(port, host, () => {
+    logger.info({ port, host, enableStreamable }, "scan-mcp HTTP server ready");
   });
   return server;
 }
