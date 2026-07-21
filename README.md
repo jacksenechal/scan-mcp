@@ -57,6 +57,7 @@ scan-mcp --http
 ```
 
 - Default port is `3001`; set `MCP_HTTP_PORT` to override (for example `MCP_HTTP_PORT=3333 scan-mcp --http`).
+- Binds all interfaces (`::`) by default; set `MCP_HTTP_HOST` to restrict (for example `MCP_HTTP_HOST=127.0.0.1` when a reverse proxy fronts the server).
 - HTTP responses use server-sent events (SSE) for streaming tool output; clients such as Claude Desktop and Windsurf support
   this transport.
 - There is currently no authentication; this is intended for internal LAN networking
