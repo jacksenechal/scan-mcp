@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ZodIssue } from "zod";
 import dotenv from "dotenv";
+import os from "os";
 
 export const ConfigSchema = z.object({
   LOG_LEVEL: z.string().default("info"),
@@ -40,7 +41,18 @@ export function loadConfig(): AppConfig {
         parsed.error.issues.map((e: ZodIssue) => `${e.path.join(".")}: ${e.message}`).join("; ")
     );
   }
-  return parsed.data;
+  return { ...parsed.data, INBOX_DIR: expandTilde(parsed.data.INBOX_DIR) };
+}
+
+/**
+ * Expand a leading `~` (referring to the current user's home directory) at the start
+ * of a path, e.g. "~/Documents/inbox" -> "/home/user/Documents/inbox" and "~" alone ->
+ * "/home/user". Paths not starting with `~` are returned unchanged.
+ */
+export function expandTilde(p: string): string {
+  if (p === "~") return os.homedir();
+  if (p.startsWith("~/") || p.startsWith("~\\")) return p.replace(/^~/, os.homedir());
+  return p;
 }
 
 function parseEnvBool(v: string | undefined): boolean | undefined {
