@@ -2,7 +2,7 @@ import type { AppContext } from "../context.js";
 import { listDevices, getDeviceOptions, type DeviceOptions } from "./sane.js";
 
 export type SelectionInput = {
-  desiredSource?: "Flatbed" | "ADF" | "ADF Duplex";
+  desiredSource?: string;
   desiredResolutionDpi?: number;
 };
 

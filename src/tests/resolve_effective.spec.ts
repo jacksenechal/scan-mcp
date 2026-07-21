@@ -34,6 +34,34 @@ describe("resolveEffectiveInput", () => {
     expect(eff.source).toBe("ADF Duplex");
   });
 
+  it("maps a requested generic ADF source to the device's reported source (Fujitsu ScanSnap S1500)", async () => {
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({
+      sources: ["ADF Front", "ADF Back", "ADF Duplex"],
+      resolutions: [300],
+    });
+    const eff = await resolveEffectiveInput({ device_id: "dev", source: "ADF" }, ctx);
+    expect(eff.source).toBe("ADF Front");
+  });
+
+  it("maps a requested ADF Duplex source to the device's Duplex source", async () => {
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({
+      sources: ["ADF Front", "ADF Back", "ADF Duplex"],
+      resolutions: [300],
+    });
+    const eff = await resolveEffectiveInput({ device_id: "dev", source: "ADF Duplex" }, ctx);
+    expect(eff.source).toBe("ADF Duplex");
+  });
+
+  it("rejects an unsupported requested source with a clear error instead of running scanimage", async () => {
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({
+      sources: ["ADF Front", "ADF Back", "ADF Duplex"],
+      resolutions: [300],
+    });
+    await expect(resolveEffectiveInput({ device_id: "dev", source: "Flatbed" }, ctx)).rejects.toThrow(
+      /Flatbed.*not supported/
+    );
+  });
+
   it("picks 300dpi when available", async () => {
     vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ resolutions: [200, 300, 600] });
     const eff = await resolveEffectiveInput({ device_id: "dev" }, ctx);

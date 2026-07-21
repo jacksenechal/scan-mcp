@@ -18,7 +18,10 @@ export type StartScanInput = {
   resolution_dpi?: number;
   // SANE backends vary (e.g., Halftone, Binary, Gray16); accept any string
   color_mode?: string;
-  source?: "Flatbed" | "ADF" | "ADF Duplex";
+  // The MCP tool schema restricts requests to "Flatbed" | "ADF" | "ADF Duplex", but the
+  // effective/resolved value may be a device-specific string (e.g. "ADF Front") once
+  // mapped against the device's reported sources, so this is widened to `string`.
+  source?: string;
   duplex?: boolean;
   page_size?: "Letter" | "A4" | "Legal" | "Custom";
   custom_size_mm?: { width: number; height: number };
@@ -353,6 +356,45 @@ function buildCommonArgs(input: StartScanInput, batchPattern: string): string[] 
   return args;
 }
 
+/**
+ * Map a requested generic source ("Flatbed" | "ADF" | "ADF Duplex") to the closest
+ * matching source string actually reported by the device (e.g. a Fujitsu ScanSnap
+ * reports ["ADF Front", "ADF Back", "ADF Duplex"], with no plain "ADF" or "Flatbed").
+ *
+ * Resolution order:
+ *  - exact (case-sensitive) match against the device's reported sources
+ *  - for "ADF": "ADF Front", else any source containing "ADF" (non-duplex preferred)
+ *  - for "ADF Duplex": any source containing "Duplex"
+ *  - for "Flatbed": any source containing "Flatbed"
+ *  - otherwise: any source containing the requested string
+ * Throws a clear error listing the device's supported sources if nothing matches.
+ */
+export function resolveSourceForDevice(requested: string, available: string[]): string {
+  if (available.includes(requested)) return requested;
+
+  const containing = (word: string, exclude?: string): string | undefined =>
+    available.find(
+      (s) => s.toLowerCase().includes(word.toLowerCase()) && (!exclude || !s.toLowerCase().includes(exclude.toLowerCase()))
+    );
+
+  const fail = (): never => {
+    throw new Error(
+      `Requested source "${requested}" is not supported by this device. Supported sources: ${available.join(", ")}`
+    );
+  };
+
+  if (requested === "ADF") {
+    return available.find((s) => s === "ADF Front") ?? containing("ADF", "Duplex") ?? containing("ADF") ?? fail();
+  }
+  if (requested === "ADF Duplex") {
+    return containing("Duplex") ?? fail();
+  }
+  if (requested === "Flatbed") {
+    return containing("Flatbed") ?? fail();
+  }
+  return containing(requested) ?? fail();
+}
+
 export function segmentPages(pages: number[], policy?: StartScanInput["doc_break_policy"]): number[][] {
   if (!policy || !policy.type || policy.type === "none" || !policy.page_count) {
     return [pages];
@@ -398,19 +440,29 @@ export async function resolveEffectiveInput(input: StartScanInput, ctx: AppConte
   }
 
   if (out.device_id) {
+    let opts: Awaited<ReturnType<typeof getDeviceOptions>> | undefined;
     try {
-      const opts = await getDeviceOptions(out.device_id, ctx);
-      if (!out.source && opts.sources && opts.sources.length) {
-        const selected = opts.sources.includes("ADF Duplex")
-          ? "ADF Duplex"
-          : opts.sources.includes("ADF")
-            ? "ADF"
-            : opts.sources[0];
-        out.source = selected as StartScanInput["source"];
-      }
-      // If duplex requested, prefer ADF Duplex when available
-      if (out.duplex && opts.sources && opts.sources.includes("ADF Duplex")) {
-        out.source = "ADF Duplex";
+      opts = await getDeviceOptions(out.device_id, ctx);
+    } catch {
+      // If the provided device_id cannot be probed, drop it and fall back to selection
+      out.device_id = undefined;
+    }
+    if (opts) {
+      if (opts.sources && opts.sources.length) {
+        // If duplex requested, prefer ADF Duplex regardless of any source already set.
+        const requested = out.duplex ? "ADF Duplex" : out.source;
+        if (requested) {
+          // Let a mapping failure (device doesn't support the requested source) propagate
+          // as a clear error rather than silently falling back to device deselection.
+          out.source = resolveSourceForDevice(requested, opts.sources);
+        } else {
+          const selected = opts.sources.includes("ADF Duplex")
+            ? "ADF Duplex"
+            : opts.sources.includes("ADF")
+              ? "ADF"
+              : opts.sources[0];
+          out.source = selected;
+        }
       }
       if (!out.resolution_dpi) {
         // First, probe 300dpi explicitly; many devices support it even if not listed
@@ -446,9 +498,6 @@ export async function resolveEffectiveInput(input: StartScanInput, ctx: AppConte
           out.color_mode = selected;
         }
       }
-    } catch {
-      // If the provided device_id cannot be probed, drop it and fall back to selection
-      out.device_id = undefined;
     }
   }
 

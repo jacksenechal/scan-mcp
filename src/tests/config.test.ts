@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadConfig } from "../config.js";
+import os from "os";
+import path from "path";
+import { loadConfig, expandTilde } from "../config.js";
 
 const ENV_VARS = [
   "LOG_LEVEL",
@@ -63,6 +65,39 @@ describe("loadConfig", () => {
     expect(cfg.IM_CONVERT_BIN).toBe("convert2");
     expect(cfg.SCAN_EXCLUDE_BACKENDS).toEqual(["v4l", "net"]);
     expect(cfg.SCAN_PREFER_BACKENDS).toEqual(["fujitsu", "canon"]);
+  });
+
+  it("expands a leading ~ in INBOX_DIR to the home directory", () => {
+    process.env.INBOX_DIR = "~/Documents/scanned_documents/inbox";
+    const cfg = loadConfig();
+    expect(cfg.INBOX_DIR).toBe(path.join(os.homedir(), "Documents/scanned_documents/inbox"));
+  });
+
+  it("expands a bare ~ to the home directory", () => {
+    process.env.INBOX_DIR = "~";
+    const cfg = loadConfig();
+    expect(cfg.INBOX_DIR).toBe(os.homedir());
+  });
+
+  it("leaves absolute and relative paths without a leading ~ unchanged", () => {
+    process.env.INBOX_DIR = "/tmp/inbox";
+    expect(loadConfig().INBOX_DIR).toBe("/tmp/inbox");
+
+    process.env.INBOX_DIR = "scanned_documents/inbox";
+    expect(loadConfig().INBOX_DIR).toBe("scanned_documents/inbox");
+  });
+});
+
+describe("expandTilde", () => {
+  it("expands ~ and ~/ prefixes", () => {
+    expect(expandTilde("~")).toBe(os.homedir());
+    expect(expandTilde("~/foo/bar")).toBe(path.join(os.homedir(), "foo/bar"));
+  });
+
+  it("does not touch paths without a leading ~", () => {
+    expect(expandTilde("/foo/~/bar")).toBe("/foo/~/bar");
+    expect(expandTilde("foo/bar")).toBe("foo/bar");
+    expect(expandTilde("~user/bar")).toBe("~user/bar");
   });
 });
 
