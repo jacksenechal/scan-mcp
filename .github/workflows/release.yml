@@ -28,8 +28,11 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          registry-url: 'https://registry.npmjs.org'
-          always-auth: true
+          # No registry-url/always-auth here: setup-node would write an .npmrc with a
+          # placeholder NODE_AUTH_TOKEN, which npm uses INSTEAD of OIDC Trusted
+          # Publishing and the publish 404s.
+      - name: Upgrade npm for Trusted Publishing (requires npm >= 11.5)
+        run: npm install -g npm@11
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Verify build and tests
