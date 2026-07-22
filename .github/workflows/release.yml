@@ -56,7 +56,14 @@ jobs:
           NPM_CONFIG_PROVENANCE: true
         run: |
           # Best practice: rebuild from source at the tagged commit; do not rely on GitHub release assets.
-          npm publish --provenance --access public
+          # Idempotent: skip if this version is already on the registry, so a rerun
+          # after a partial failure can proceed to the MCP registry publish.
+          VERSION=$(jq -r '.version' package.json)
+          if [ "$(npm view "scan-mcp@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+            echo "scan-mcp@$VERSION already published; skipping npm publish"
+          else
+            npm publish --provenance --access public
+          fi
       - name: Install MCP Publisher CLI
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.0/mcp-publisher_1.8.0_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
