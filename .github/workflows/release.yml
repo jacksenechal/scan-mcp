@@ -66,7 +66,8 @@ jobs:
           fi
       - name: Install MCP Publisher CLI
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.0/mcp-publisher_1.8.0_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
+          # Asset names dropped the version segment after v1.x (mcp-publisher_linux_amd64.tar.gz)
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.0/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" \
             | tar xz mcp-publisher
       - name: Login to MCP Registry (GitHub OIDC)
         run: ./mcp-publisher login github-oidc
