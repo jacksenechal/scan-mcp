@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.0](https://github.com/jacksenechal/scan-mcp/compare/v0.2.1...v0.3.0) (2026-07-21)
+
+
+### Features
+
+* support MCP_HTTP_HOST to restrict HTTP transport bind address ([#36](https://github.com/jacksenechal/scan-mcp/issues/36)) ([e53a23d](https://github.com/jacksenechal/scan-mcp/commit/e53a23dc8036e1df775049768d0223ed148d32f0))
+
+
+### Bug Fixes
+
+* map generic sources to device-reported names and expand ~ in INBOX_DIR ([#34](https://github.com/jacksenechal/scan-mcp/issues/34)) ([830f76e](https://github.com/jacksenechal/scan-mcp/commit/830f76efe9508b5e175a173d45518e05afcc0562))
+* populate empty LICENSE file with standard MIT text ([#33](https://github.com/jacksenechal/scan-mcp/issues/33)) ([fd6b517](https://github.com/jacksenechal/scan-mcp/commit/fd6b517f26a77ac8b3140917adf050d29821b4b3))
+
 ## [0.2.1](https://github.com/jacksenechal/scan-mcp/compare/v0.2.0...v0.2.1) (2025-12-15)
 
 
