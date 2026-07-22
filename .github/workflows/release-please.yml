@@ -8,15 +8,34 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Release Please
+        id: release
         uses: googleapis/release-please-action@v4
         with:
+          # NOTE: do not add a release-type input here; it would switch the action
+          # to bootstrap mode and silently ignore this config file (extra-files etc.)
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          release-type: node
           target-branch: main
+
+  # Releases created above use GITHUB_TOKEN, whose events never trigger other
+  # workflows, so the Release workflow must be dispatched explicitly
+  # (workflow_dispatch is exempt from that restriction).
+  trigger-publish:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Release workflow for the new tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --repo ${{ github.repository }} --ref ${{ needs.release-please.outputs.tag_name }}
