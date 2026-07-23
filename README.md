@@ -45,7 +45,7 @@ Add a server entry to your MCP client configuration:
 
 - This invocation runs over stdio for a privacy-first, single-machine setup.
 - Call `start_scan_job` without a `device_id` to auto-select a scanner and begin scanning.
-- Artifacts are written under `INBOX_DIR` per job: `job-*/page_*.tiff`, `doc_*.tiff`, `manifest.json`, `events.jsonl`.
+- Artifacts are written under `INBOX_DIR` per job: `job-*/page_*.tiff`, `doc_*.tiff`, `manifest.json`, `events.jsonl`. When `crop_carrier_sheets` is set and a carrier sheet is detected, a `page_*.cropped.tiff` derivative is also written per affected page.
 
 ## Streamable HTTP transport
 
@@ -116,6 +116,7 @@ scan-mcp --http
     - `doc_break_policy` { `type`, `blank_threshold`, `page_count`, `timer_ms`, `barcode_values` }
     - `output_format` (string, default `tiff`)
     - `tmp_dir` (string)
+    - `crop_carrier_sheets` (boolean, default `false`): detect carrier-sheet leading-edge band and write cropped page derivatives; raw pages are kept
 
 - **get_job_status**
   - Inspect job state and artifact counts.

@@ -32,6 +32,11 @@
       }
     },
     "output_format": { "type": "string", "default": "tiff" },
-    "tmp_dir": { "type": "string" }
+    "tmp_dir": { "type": "string" },
+    "crop_carrier_sheets": {
+      "type": "boolean",
+      "default": false,
+      "description": "Detect carrier-sheet leading-edge band and write cropped page derivatives; raw pages are kept."
+    }
   }
 }

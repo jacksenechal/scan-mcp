@@ -52,4 +52,17 @@ describe("startScanJob (mock)", () => {
     const cancel = await cancelJob(res.job_id, ctx, tmpRoot);
     expect(cancel.ok).toBe(true);
   });
+
+  it("skips carrier sheet detection entirely (manifest pages have no carrier fields)", async () => {
+    const res = await startScanJob({ tmp_dir: tmpRoot, crop_carrier_sheets: true }, ctx);
+    const manifestPath = path.join(res.run_dir, "manifest.json");
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+    expect(manifest.state).toBe("completed");
+    expect(manifest.pages.length).toBeGreaterThan(0);
+    for (const page of manifest.pages) {
+      expect(page.carrier_sheet).toBeUndefined();
+      expect(page.cropped_path).toBeUndefined();
+      expect(page.cropped_sha256).toBeUndefined();
+    }
+  });
 });

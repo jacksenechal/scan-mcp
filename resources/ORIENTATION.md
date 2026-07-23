@@ -37,6 +37,10 @@ Inputs for `start_scan_job` (all optional unless specified):
 - `page_size`: `Letter` | `A4` | `Legal` | `Custom` (+ `custom_size_mm`).
 - `doc_break_policy`: Advanced per-page splitting config (optional).
 - `tmp_dir`: Override base dir for `run_dir` placement (optional).
+- `crop_carrier_sheets`: If `true`, crop pages that show a detected carrier-sheet leading-edge band and assemble documents from the cropped derivatives (optional; default `false`).
+
+## Carrier Sheets
+Scanner carrier sheets (clear sleeves for fragile/small documents) leave a dark leading-edge pattern band across the top of the raw scan. The server always detects this band and annotates the affected page in the manifest (`carrier_sheet: { detected: true, band_rows }`); nothing changes in the captured files unless you opt in. Pass `crop_carrier_sheets: true` to also write a cropped derivative next to each affected raw page (`cropped_path`, `cropped_sha256`); the raw page is never modified or deleted, and assembled documents use the cropped derivative when present.
 
 ## Mapping User Requests To Parameters
 
@@ -72,11 +76,11 @@ After `start_scan_job`, you receive `{ job_id, run_dir, state }`.
 - Poll `get_job_status { job_id }` until `state` is `completed`.
 - In `run_dir`, you should see:
   - `manifest.json`: job metadata, params, page and document listings.
-  - `events.jsonl`: chronological events (e.g., `job_started`, `scanner_exec`, `job_completed`).
+  - `events.jsonl`: chronological events (e.g., `job_started`, `scanner_exec`, `carrier_sheet_detected`, `carrier_sheet_cropped`, `carrier_detection_skipped`, `job_completed`).
   - `page_0001.tiff`, `page_0002.tiff`, …: raw captured pages.
   - `doc_0001.tiff` (and/or assembled outputs when configured): multipage artifacts.
 - A typical events sequence includes:
-  - `job_started` → `scanner_exec` → (optional `scanner_failed` on retries) → `job_completed`.
+  - `job_started` → `scanner_exec` → (optional `scanner_failed` on retries) → (optional `carrier_sheet_detected` / `carrier_sheet_cropped` per page, or `carrier_detection_skipped` if ImageMagick is unavailable) → `job_completed`.
 
 ## Troubleshooting Flow (When Something Goes Wrong)
 1) Inspect manifest and events:

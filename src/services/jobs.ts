@@ -8,6 +8,7 @@ import type { AppConfig } from "../config.js";
 import { DEFAULT_RESOLUTION_DPI, LETTER_WIDTH_MM, LETTER_HEIGHT_MM, A4_WIDTH_MM, A4_HEIGHT_MM, LEGAL_WIDTH_MM, LEGAL_HEIGHT_MM } from "../constants.js";
 import { selectDevice } from "./select.js";
 import { getDeviceOptions } from "./sane.js";
+import { detectCarrierSheet, cropCarrierSheet } from "./carrier.js";
 
 import { tailTextFile, resolveJobPath } from "./utils.js";
 
@@ -34,6 +35,8 @@ export type StartScanInput = {
   };
   output_format?: string;
   tmp_dir?: string;
+  // Detect carrier sheet leading-edge band and crop derivatives.
+  crop_carrier_sheets?: boolean;
 };
 
 export type StartScanResult = {
@@ -47,7 +50,14 @@ type Manifest = {
   device_id: string | null;
   created_at: string;
   params: StartScanInput;
-  pages: { index: number; path: string; sha256: string }[];
+  pages: {
+    index: number;
+    path: string;
+    sha256: string;
+    carrier_sheet?: { detected: true; band_rows: [number, number] };
+    cropped_path?: string;
+    cropped_sha256?: string;
+  }[];
   documents: { index: number; pages: number[]; path: string; sha256: string }[];
   state: "running" | "completed" | "cancelled" | "error";
 };
@@ -161,24 +171,81 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
   return ran; // Return ran
 }
 
-async function processPages(runDir: string, manifest: Manifest, ctx: AppContext) {
+async function processPages(runDir: string, manifest: Manifest, ctx: AppContext, eventsPath: string) {
   const { config } = ctx;
   const entries = await fs.readdir(runDir);
-  const pageFiles = entries.filter((f) => f.startsWith("page_") && f.endsWith(".tiff")).sort();
+  const pageFiles = entries
+    .filter((f) => f.startsWith("page_") && f.endsWith(".tiff") && !f.endsWith(".cropped.tiff"))
+    .sort();
   for (let idx = 0; idx < pageFiles.length; idx++) {
     const f = pageFiles[idx];
     const p = path.join(runDir, f);
     manifest.pages.push({ index: idx + 1, path: p, sha256: await hashFile(p) });
   }
 
+  await detectAndCropCarrierSheets(manifest, ctx, eventsPath);
+
   const segments = segmentPages(manifest.pages.map((p) => p.index), manifest.params.doc_break_policy);
   let docIdx = 1;
   for (const seg of segments) {
     const outDoc = path.join(runDir, `doc_${String(docIdx).padStart(4, "0")}.tiff`);
-    const segFiles = seg.map((i) => manifest.pages[i - 1]?.path).filter(Boolean) as string[];
+    const segFiles = seg
+      .map((i) => manifest.pages[i - 1])
+      .filter(Boolean)
+      .map((pg) => pg!.cropped_path ?? pg!.path);
     await assembleTiff(segFiles, outDoc, config);
     manifest.documents.push({ index: docIdx, pages: seg, path: outDoc, sha256: await hashFile(outDoc) });
     docIdx++;
+  }
+}
+
+async function detectAndCropCarrierSheets(manifest: Manifest, ctx: AppContext, eventsPath: string) {
+  const { config } = ctx;
+  if (config.SCAN_MOCK) return;
+
+  const cropRequested = Boolean(manifest.params.crop_carrier_sheets);
+  for (const page of manifest.pages) {
+    try {
+      const result = await detectCarrierSheet(page.path, ctx);
+      if (!result.detected || !result.band_rows) continue;
+
+      page.carrier_sheet = { detected: true, band_rows: result.band_rows };
+      await appendEvent(eventsPath, {
+        ts: new Date().toISOString(),
+        type: "carrier_sheet_detected",
+        data: { page: page.index, band_rows: result.band_rows },
+      });
+
+      if (cropRequested) {
+        const croppedPath = page.path.replace(/\.tiff$/, ".cropped.tiff");
+        const { crop_box } = await cropCarrierSheet(
+          page.path,
+          croppedPath,
+          result.band_rows,
+          { width: result.width, height: result.height },
+          ctx
+        );
+        page.cropped_path = croppedPath;
+        page.cropped_sha256 = await hashFile(croppedPath);
+        await appendEvent(eventsPath, {
+          ts: new Date().toISOString(),
+          type: "carrier_sheet_cropped",
+          data: { page: page.index, crop_box },
+        });
+      }
+    } catch (err) {
+      // Carrier detection/crop failures must never fail a scan job. Most errors
+      // (e.g. a malformed/unreadable single page) only affect that page, so log
+      // and move on. Only stop attempting detection for the remaining pages when
+      // the ImageMagick binary itself failed to spawn (ENOENT), since retrying
+      // per page is pointless if the tool is missing.
+      await appendEvent(eventsPath, {
+        ts: new Date().toISOString(),
+        type: "carrier_detection_skipped",
+        data: { page: page.index, reason: String(err) },
+      });
+      if (isNodeError(err) && err.code === "ENOENT") break;
+    }
   }
 }
 
@@ -212,7 +279,7 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
     return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
   }
 
-  await processPages(runDir, manifest, ctx);
+  await processPages(runDir, manifest, ctx, eventsPath);
 
   manifest.state = "completed";
   await updateManifest(runDir, manifest);
