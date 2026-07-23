@@ -116,6 +116,7 @@ scan-mcp --http
     - `doc_break_policy` { `type`, `blank_threshold`, `page_count`, `timer_ms`, `barcode_values` }
     - `output_format` (string, default `tiff`)
     - `tmp_dir` (string)
+    - `crop_carrier_sheets` (boolean, default `false`): detect carrier-sheet leading-edge band and write cropped page derivatives; raw pages are kept
 
 - **get_job_status**
   - Inspect job state and artifact counts.

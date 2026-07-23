@@ -55,6 +55,8 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     ),
     output_format: nullToUndef(z.string()),
     tmp_dir: nullToUndef(z.string()),
+    // Detect carrier sheet leading-edge band and crop derivatives.
+    crop_carrier_sheets: nullToUndef(z.boolean()),
   });
 
   server.tool(

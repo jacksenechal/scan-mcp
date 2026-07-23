@@ -75,6 +75,7 @@ describe("JSON Schemas", () => {
       doc_break_policy: { type: "page_count", page_count: 1 },
       output_format: "pdf",
       tmp_dir: "/tmp/scans",
+      crop_carrier_sheets: true,
     };
     expect(validate(validData)).toBe(true);
     expect(validate.errors).toBeNull();

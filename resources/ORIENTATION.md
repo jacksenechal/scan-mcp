@@ -37,6 +37,10 @@ Inputs for `start_scan_job` (all optional unless specified):
 - `page_size`: `Letter` | `A4` | `Legal` | `Custom` (+ `custom_size_mm`).
 - `doc_break_policy`: Advanced per-page splitting config (optional).
 - `tmp_dir`: Override base dir for `run_dir` placement (optional).
+- `crop_carrier_sheets`: If `true`, crop pages that show a detected carrier-sheet leading-edge band and assemble documents from the cropped derivatives (optional; default `false`).
+
+## Carrier Sheets
+Scanner carrier sheets (clear sleeves for fragile/small documents) leave a dark leading-edge pattern band across the top of the raw scan. The server always detects this band and annotates the affected page in the manifest (`carrier_sheet: { detected: true, band_rows }`); nothing changes in the captured files unless you opt in. Pass `crop_carrier_sheets: true` to also write a cropped derivative next to each affected raw page (`cropped_path`, `cropped_sha256`); the raw page is never modified or deleted, and assembled documents use the cropped derivative when present.
 
 ## Mapping User Requests To Parameters
 
