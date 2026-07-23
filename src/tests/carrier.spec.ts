@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   parseGrayProfile,
   detectBandFromRowMeans,
@@ -7,8 +7,12 @@ import {
   pickDocumentComponent,
   expandAndClampBox,
   scaleBox,
+  detectCarrierSheet,
   PROFILE_SAMPLES,
 } from "../services/carrier.js";
+import type { AppConfig } from "../config.js";
+import type { AppContext } from "../context.js";
+import type { Logger } from "pino";
 
 describe("parseGrayProfile", () => {
   it("parses gray(NNN) form", () => {
@@ -31,6 +35,23 @@ describe("parseGrayProfile", () => {
   it("orders by row and ignores the header line", () => {
     const txt = ["# ImageMagick pixel enumeration: 1,3,255,srgb", "0,2: (0)  #000000  gray(30)", "0,0: (0)  #000000  gray(10)", "0,1: (0)  #000000  gray(20)"].join("\n");
     expect(parseGrayProfile(txt)).toEqual([10 / 255, 20 / 255, 30 / 255]);
+  });
+
+  it("parses named colors black and white", () => {
+    const txt = ["0,0: (0)  #000000  black", "0,1: (0)  #FFFFFF  white"].join("\n");
+    expect(parseGrayProfile(txt)).toEqual([0, 1]);
+  });
+
+  it("places values by y index even with an unparseable line in between (gappy fixture)", () => {
+    const txt = [
+      "0,0: (0)  #000000  gray(10)",
+      "0,1: this line is garbage and does not match",
+      "0,2: (0)  #000000  gray(30)",
+    ].join("\n");
+    const parsed = parseGrayProfile(txt);
+    expect(parsed[0]).toBeCloseTo(10 / 255);
+    expect(parsed[1]).toBeUndefined();
+    expect(parsed[2]).toBeCloseTo(30 / 255);
   });
 });
 
@@ -88,6 +109,17 @@ describe("detectBandFromRowMeans", () => {
       [12, 16, 0.2],
     ]);
     expect(detectBandFromRowMeans(means)).toEqual({ start: 0, end: 4 });
+  });
+
+  it("falls back to the initial run when merging would overshoot into a too-thick dark region", () => {
+    // Band [0,8], short gap [9,11], then a dark document top [12,60] that would
+    // merge into a too-thick run if not for the fallback.
+    const means = buildProfile(PROFILE_SAMPLES, [
+      [0, 8, 0.2],
+      [9, 11, 0.9],
+      [12, 60, 0.2],
+    ]);
+    expect(detectBandFromRowMeans(means)).toEqual({ start: 0, end: 8 });
   });
 });
 
@@ -167,5 +199,25 @@ describe("pickDocumentComponent", () => {
     const components = [{ x: 0, y: 0, w: 20, h: 20, area: 400, color: "gray(255)" }];
     // 400 / (400*400) = 0.25% < 2%
     expect(pickDocumentComponent(components, 400, 400)).toBeNull();
+  });
+});
+
+describe("detectCarrierSheet error containment", () => {
+  it("rejects when IM_CONVERT_BIN points to a nonexistent binary", async () => {
+    const config: AppConfig = {
+      SCAN_MOCK: false,
+      INBOX_DIR: "/tmp",
+      LOG_LEVEL: "silent",
+      SCAN_EXCLUDE_BACKENDS: [],
+      SCAN_PREFER_BACKENDS: [],
+      SCANIMAGE_BIN: "scanimage",
+      TIFFCP_BIN: "tiffcp",
+      IM_CONVERT_BIN: "/nonexistent-convert-bin",
+      PERSIST_LAST_USED_DEVICE: false,
+    };
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
+    const ctx: AppContext = { config, logger };
+
+    await expect(detectCarrierSheet("/tmp/does-not-matter.tiff", ctx)).rejects.toThrow();
   });
 });

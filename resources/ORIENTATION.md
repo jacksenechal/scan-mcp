@@ -76,11 +76,11 @@ After `start_scan_job`, you receive `{ job_id, run_dir, state }`.
 - Poll `get_job_status { job_id }` until `state` is `completed`.
 - In `run_dir`, you should see:
   - `manifest.json`: job metadata, params, page and document listings.
-  - `events.jsonl`: chronological events (e.g., `job_started`, `scanner_exec`, `job_completed`).
+  - `events.jsonl`: chronological events (e.g., `job_started`, `scanner_exec`, `carrier_sheet_detected`, `carrier_sheet_cropped`, `carrier_detection_skipped`, `job_completed`).
   - `page_0001.tiff`, `page_0002.tiff`, …: raw captured pages.
   - `doc_0001.tiff` (and/or assembled outputs when configured): multipage artifacts.
 - A typical events sequence includes:
-  - `job_started` → `scanner_exec` → (optional `scanner_failed` on retries) → `job_completed`.
+  - `job_started` → `scanner_exec` → (optional `scanner_failed` on retries) → (optional `carrier_sheet_detected` / `carrier_sheet_cropped` per page, or `carrier_detection_skipped` if ImageMagick is unavailable) → `job_completed`.
 
 ## Troubleshooting Flow (When Something Goes Wrong)
 1) Inspect manifest and events:

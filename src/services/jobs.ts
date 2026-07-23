@@ -174,7 +174,9 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
 async function processPages(runDir: string, manifest: Manifest, ctx: AppContext, eventsPath: string) {
   const { config } = ctx;
   const entries = await fs.readdir(runDir);
-  const pageFiles = entries.filter((f) => f.startsWith("page_") && f.endsWith(".tiff")).sort();
+  const pageFiles = entries
+    .filter((f) => f.startsWith("page_") && f.endsWith(".tiff") && !f.endsWith(".cropped.tiff"))
+    .sort();
   for (let idx = 0; idx < pageFiles.length; idx++) {
     const f = pageFiles[idx];
     const p = path.join(runDir, f);
@@ -232,14 +234,17 @@ async function detectAndCropCarrierSheets(manifest: Manifest, ctx: AppContext, e
         });
       }
     } catch (err) {
-      // Carrier detection/crop failures must never fail a scan job: log once and stop
-      // attempting detection for the remaining pages, but continue the job normally.
+      // Carrier detection/crop failures must never fail a scan job. Most errors
+      // (e.g. a malformed/unreadable single page) only affect that page, so log
+      // and move on. Only stop attempting detection for the remaining pages when
+      // the ImageMagick binary itself failed to spawn (ENOENT), since retrying
+      // per page is pointless if the tool is missing.
       await appendEvent(eventsPath, {
         ts: new Date().toISOString(),
         type: "carrier_detection_skipped",
-        data: { reason: String(err) },
+        data: { page: page.index, reason: String(err) },
       });
-      break;
+      if (isNodeError(err) && err.code === "ENOENT") break;
     }
   }
 }

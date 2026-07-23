@@ -17,7 +17,7 @@ export type ConnectedComponent = { x: number; y: number; w: number; h: number; a
  * N luminance means normalized to 0..1, ordered by row.
  */
 export function parseGrayProfile(txt: string): number[] {
-  const rows: { y: number; value: number }[] = [];
+  const rows: number[] = [];
   const lineRe = /^\s*(\d+),(\d+):\s*\([^)]*\)\s*#[0-9A-Fa-f]+\s*(.+?)\s*$/;
   for (const line of txt.split(/\r?\n/)) {
     if (!line || line.startsWith("#")) continue;
@@ -26,14 +26,19 @@ export function parseGrayProfile(txt: string): number[] {
     const y = parseInt(m[2], 10);
     const value = colorSpecToUnit(m[3]);
     if (value === null) continue;
-    rows.push({ y, value });
+    // Place by row index rather than push+sort, so an unparseable/out-of-order
+    // line can't desynchronize the sample index from its row position.
+    rows[y] = value;
   }
-  rows.sort((a, b) => a.y - b.y);
-  return rows.map((r) => r.value);
+  return rows;
 }
 
-/** Parse a trailing color spec (`gray(NNN)`, `gray(NN%)`, `srgb(r,g,b)`) into a 0..1 unit value. */
+/** Parse a trailing color spec (`gray(NNN)`, `gray(NN%)`, `srgb(r,g,b)`, `black`, `white`) into a 0..1 unit value. */
 function colorSpecToUnit(spec: string): number | null {
+  const trimmed = spec.trim().toLowerCase();
+  if (trimmed === "black") return 0;
+  if (trimmed === "white") return 1;
+
   let m = /gray\((\d+(?:\.\d+)?)%\)/i.exec(spec);
   if (m) return parseFloat(m[1]) / 100;
 
@@ -82,6 +87,7 @@ export function detectBandFromRowMeans(
 
   let end = start;
   while (end + 1 < n && means[end + 1] < darkThreshold) end++;
+  const initialEnd = end;
 
   // Merge subsequent dark runs separated by short light gaps: patterns like the
   // Fujitsu filmstrip have a row of white sprocket squares inside the band, which
@@ -94,9 +100,16 @@ export function detectBandFromRowMeans(
     while (end + 1 < n && means[end + 1] < darkThreshold) end++;
   }
 
-  const length = end - start + 1;
   const maxStart = maxStartFrac * n;
   const maxThickness = maxThicknessFrac * n;
+  let length = end - start + 1;
+  if (length > maxThickness) {
+    // The merge overshot into a separate, too-thick dark region (e.g. a document
+    // with a dark top that immediately follows the band); fall back to the
+    // initial run rather than rejecting a genuine band.
+    end = initialEnd;
+    length = end - start + 1;
+  }
   if (start <= maxStart && length >= minThicknessSamples && length <= maxThickness) {
     return { start, end };
   }
@@ -185,6 +198,9 @@ function clamp(v: number, lo: number, hi: number): number {
 export async function getImageSize(imagePath: string, ctx: AppContext): Promise<{ width: number; height: number }> {
   const { stdout } = await execa(ctx.config.IM_CONVERT_BIN, [imagePath, "-format", "%w %h", "info:"], { shell: false });
   const [w, h] = stdout.trim().split(/\s+/).map((s) => parseInt(s, 10));
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    throw new Error(`unparseable image size from ImageMagick: ${JSON.stringify(stdout)}`);
+  }
   return { width: w, height: h };
 }
 
@@ -194,7 +210,11 @@ export async function computeRowMeans(imagePath: string, ctx: AppContext): Promi
     [imagePath, "-colorspace", "Gray", "-resize", `1x${PROFILE_SAMPLES}!`, "-depth", "8", "txt:-"],
     { shell: false }
   );
-  return parseGrayProfile(stdout);
+  const profile = parseGrayProfile(stdout);
+  if (profile.length !== PROFILE_SAMPLES || profile.some((v) => v === undefined || !Number.isFinite(v))) {
+    throw new Error("unparseable gray profile from ImageMagick");
+  }
+  return profile;
 }
 
 export type CarrierDetection = {
@@ -263,7 +283,7 @@ async function computeDocumentBox(
       "-colorspace",
       "Gray",
       "-resize",
-      "400x400",
+      "400x400>",
       "-auto-threshold",
       "Otsu",
       "-define",
