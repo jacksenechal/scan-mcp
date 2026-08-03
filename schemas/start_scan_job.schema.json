@@ -8,7 +8,11 @@
   "properties": {
     "device_id": { "type": "string" },
     "resolution_dpi": { "type": "integer", "minimum": 50, "maximum": 1200 },
-    "color_mode": { "type": "string", "enum": ["Color", "Gray", "Lineart"] },
+    "color_mode": {
+      "type": "string",
+      "enum": ["Color", "Gray", "Lineart"],
+      "description": "Defaults to Lineart (1-bit), which is correct for black-and-white text documents but ruins artwork, photos, and anything with color or shading. Explicitly pass 'Color' (or 'Gray' for grayscale material) for those. A high resolution_dpi does NOT imply color."
+    },
     "source": { "type": "string", "enum": ["Flatbed", "ADF", "ADF Duplex"] },
     "duplex": { "type": "boolean" },
     "page_size": { "type": "string", "enum": ["Letter", "A4", "Legal", "Custom"] },

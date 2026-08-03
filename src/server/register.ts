@@ -39,7 +39,13 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     device_id: nullToUndef(z.string()),
     resolution_dpi: nullToUndef(z.number().int()),
     // Allow any string; devices may expose Halftone, Binary, Gray16, etc.
-    color_mode: nullToUndef(z.string()),
+    color_mode: nullToUndef(
+      z
+        .string()
+        .describe(
+          "Defaults to Lineart (1-bit), which is correct for black-and-white text documents but ruins artwork, photos, and anything with color or shading. Explicitly pass 'Color' (or 'Gray' for grayscale material) for those. A high resolution_dpi does NOT imply color."
+        )
+    ),
     source: nullToUndef(z.enum(["Flatbed", "ADF", "ADF Duplex"])),
     duplex: nullToUndef(z.boolean()),
     page_size: nullToUndef(z.enum(["Letter", "A4", "Legal", "Custom"])),

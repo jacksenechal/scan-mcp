@@ -559,8 +559,8 @@ export async function resolveEffectiveInput(input: StartScanInput, ctx: AppConte
           const match = available.find((m) => m.toLowerCase() === String(out.color_mode).toLowerCase());
           if (match) out.color_mode = match;
         } else {
-          // Prefer Color → Gray → Halftone → Lineart; otherwise first available
-          const pref = ["Color", "Gray", "Halftone", "Lineart"];
+          // Prefer Lineart → Gray → Halftone → Color; otherwise first available
+          const pref = ["Lineart", "Gray", "Halftone", "Color"];
           const selected = pref.find((p) => available.some((m) => m.toLowerCase() === p.toLowerCase())) ?? available[0];
           out.color_mode = selected;
         }
@@ -570,7 +570,7 @@ export async function resolveEffectiveInput(input: StartScanInput, ctx: AppConte
 
   if (!out.source) out.source = "Flatbed";
   if (!out.resolution_dpi) out.resolution_dpi = DEFAULT_RESOLUTION_DPI;
-  if (!out.color_mode) out.color_mode = "Color";
+  if (!out.color_mode) out.color_mode = "Lineart";
 
   return out;
 }

@@ -81,15 +81,10 @@ describe("resolveSourceForDevice", () => {
   });
 });
 
-describe("resolveEffectiveInput color_mode defaulting", () => {
-  it("defaults to Color when only resolution_dpi is specified (600dpi, no color_mode)", async () => {
-    const effective = await resolveEffectiveInput({ resolution_dpi: 600, device_id: "dev" }, ctx);
+describe("resolveEffectiveInput color_mode", () => {
+  it("honors an explicit color_mode even when it differs from the device-preferred default", async () => {
+    const effective = await resolveEffectiveInput({ color_mode: "Color", device_id: "dev" }, ctx);
     expect(effective.color_mode).toBe("Color");
-  });
-
-  it("still honors an explicit color_mode", async () => {
-    const effective = await resolveEffectiveInput({ color_mode: "Lineart", device_id: "dev" }, ctx);
-    expect(effective.color_mode).toBe("Lineart");
   });
 });
 

@@ -108,7 +108,10 @@ scan-mcp --http
   - Inputs (all optional unless noted):
     - `device_id` (string)
     - `resolution_dpi` (integer, 50–1200)
-    - `color_mode` (`Color` | `Gray` | `Lineart`)
+    - `color_mode` (`Color` | `Gray` | `Lineart`): defaults to `Lineart` (1-bit), which is correct
+      for black-and-white text but ruins artwork, photos, and anything with color or shading;
+      explicitly pass `Color` (or `Gray` for grayscale material) for those. A high
+      `resolution_dpi` does not imply color.
     - `source` (`Flatbed` | `ADF` | `ADF Duplex`)
     - `duplex` (boolean)
     - `page_size` (`Letter` | `A4` | `Legal` | `Custom`)

@@ -86,32 +86,22 @@ describe("resolveEffectiveInput", () => {
     expect(eff.resolution_dpi).toBe(300);
   });
 
-  it("defaults color mode to Color and prefers Color > Gray > Lineart", async () => {
+  it("defaults color mode to Lineart and prefers Lineart > Gray > Color", async () => {
     vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Color", "Gray", "Lineart"], resolutions: [300] });
     const eff1 = await resolveEffectiveInput({ device_id: "dev" }, ctx);
-    expect(eff1.color_mode).toBe("Color");
+    expect(eff1.color_mode).toBe("Lineart");
 
-    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Gray", "Lineart"], resolutions: [300] });
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Color", "Gray"], resolutions: [300] });
     const eff2 = await resolveEffectiveInput({ device_id: "dev" }, ctx);
     expect(eff2.color_mode).toBe("Gray");
 
-    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Lineart"], resolutions: [300] });
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Color"], resolutions: [300] });
     const eff3 = await resolveEffectiveInput({ device_id: "dev" }, ctx);
-    expect(eff3.color_mode).toBe("Lineart");
+    expect(eff3.color_mode).toBe("Color");
 
     vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({});
     const eff4 = await resolveEffectiveInput({ device_id: "dev" }, ctx);
-    expect(eff4.color_mode).toBe("Color");
-  });
-
-  it("defaults color mode to Color at 600dpi when unspecified (Fujitsu ScanSnap S1500 regression)", async () => {
-    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({
-      sources: ["ADF Duplex"],
-      color_modes: ["Color", "Gray", "Lineart"],
-      resolutions: [200, 300, 600],
-    });
-    const eff = await resolveEffectiveInput({ resolution_dpi: 600, source: "ADF Duplex", device_id: "dev" }, ctx);
-    expect(eff.color_mode).toBe("Color");
+    expect(eff4.color_mode).toBe("Lineart");
   });
 
   it("probes 300dpi even when not listed and uses it if accepted", async () => {
