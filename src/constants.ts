@@ -1,5 +1,10 @@
 export const DEFAULT_RESOLUTION_DPI = 300;
 
+// At or above this resolution, an unspecified color_mode defaults to Color instead of
+// Lineart: requesting high-dpi capture signals artwork/photos, where 1-bit destroys
+// information. Below it, scan-mcp stays document-first and defaults to Lineart.
+export const HIGH_RES_COLOR_DEFAULT_DPI = 600;
+
 export const LETTER_WIDTH_MM = 215.9;
 export const LETTER_HEIGHT_MM = 279.4;
 export const A4_WIDTH_MM = 210;

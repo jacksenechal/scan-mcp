@@ -11,7 +11,7 @@
     "color_mode": {
       "type": "string",
       "enum": ["Color", "Gray", "Lineart"],
-      "description": "Defaults to Lineart (1-bit), which is correct for black-and-white text documents but ruins artwork, photos, and anything with color or shading. Explicitly pass 'Color' (or 'Gray' for grayscale material) for those. A high resolution_dpi does NOT imply color."
+      "description": "color_mode defaults to Lineart (document-first); at >= 600dpi it defaults to Color, since high-dpi capture usually means artwork/photos where 1-bit destroys information. Pass color_mode explicitly to override either default; high dpi is the only signal used."
     },
     "source": { "type": "string", "enum": ["Flatbed", "ADF", "ADF Duplex"] },
     "duplex": { "type": "boolean" },

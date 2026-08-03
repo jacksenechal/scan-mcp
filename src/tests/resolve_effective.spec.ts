@@ -86,22 +86,62 @@ describe("resolveEffectiveInput", () => {
     expect(eff.resolution_dpi).toBe(300);
   });
 
-  it("defaults color mode to Lineart and prefers Lineart > Gray > Color", async () => {
+  it("at ordinary resolution (300dpi), defaults color mode to Lineart and prefers Lineart > Gray > Color", async () => {
     vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Color", "Gray", "Lineart"], resolutions: [300] });
-    const eff1 = await resolveEffectiveInput({ device_id: "dev" }, ctx);
+    const eff1 = await resolveEffectiveInput({ device_id: "dev", resolution_dpi: 300 }, ctx);
     expect(eff1.color_mode).toBe("Lineart");
 
     vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Color", "Gray"], resolutions: [300] });
-    const eff2 = await resolveEffectiveInput({ device_id: "dev" }, ctx);
+    const eff2 = await resolveEffectiveInput({ device_id: "dev", resolution_dpi: 300 }, ctx);
     expect(eff2.color_mode).toBe("Gray");
 
     vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Color"], resolutions: [300] });
-    const eff3 = await resolveEffectiveInput({ device_id: "dev" }, ctx);
+    const eff3 = await resolveEffectiveInput({ device_id: "dev", resolution_dpi: 300 }, ctx);
     expect(eff3.color_mode).toBe("Color");
+  });
+
+  it("at high resolution (600dpi and above), defaults color mode to Color and prefers Color > Gray > Lineart (Fujitsu ScanSnap S1500 regression)", async () => {
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({
+      sources: ["ADF Duplex"],
+      color_modes: ["Color", "Gray", "Lineart"],
+      resolutions: [200, 300, 600],
+    });
+    const eff1 = await resolveEffectiveInput({ device_id: "dev", source: "ADF Duplex", resolution_dpi: 600 }, ctx);
+    expect(eff1.color_mode).toBe("Color");
+
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Gray", "Lineart"], resolutions: [600] });
+    const eff2 = await resolveEffectiveInput({ device_id: "dev", resolution_dpi: 600 }, ctx);
+    expect(eff2.color_mode).toBe("Gray");
+
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Lineart"], resolutions: [600] });
+    const eff3 = await resolveEffectiveInput({ device_id: "dev", resolution_dpi: 600 }, ctx);
+    expect(eff3.color_mode).toBe("Lineart");
+  });
+
+  it("defaults color mode to Lineart when no resolution_dpi is requested (resolves via the 300dpi default)", async () => {
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Color", "Gray", "Lineart"], resolutions: [300] });
+    const eff = await resolveEffectiveInput({ device_id: "dev" }, ctx);
+    expect(eff.resolution_dpi).toBe(300);
+    expect(eff.color_mode).toBe("Lineart");
+  });
+
+  it("honors an explicit color_mode regardless of resolution", async () => {
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({ color_modes: ["Color", "Gray", "Lineart"], resolutions: [300, 600] });
+    const atLowRes = await resolveEffectiveInput({ device_id: "dev", resolution_dpi: 300, color_mode: "Color" }, ctx);
+    expect(atLowRes.color_mode).toBe("Color");
+
+    const atHighRes = await resolveEffectiveInput({ device_id: "dev", resolution_dpi: 600, color_mode: "Lineart" }, ctx);
+    expect(atHighRes.color_mode).toBe("Lineart");
+  });
+
+  it("falls back to Lineart at ordinary resolution and Color at high resolution when the device reports no options", async () => {
+    vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({});
+    const atLowRes = await resolveEffectiveInput({ device_id: "dev", resolution_dpi: 300 }, ctx);
+    expect(atLowRes.color_mode).toBe("Lineart");
 
     vi.spyOn(sane, "getDeviceOptions").mockResolvedValue({});
-    const eff4 = await resolveEffectiveInput({ device_id: "dev" }, ctx);
-    expect(eff4.color_mode).toBe("Lineart");
+    const atHighRes = await resolveEffectiveInput({ device_id: "dev", resolution_dpi: 600 }, ctx);
+    expect(atHighRes.color_mode).toBe("Color");
   });
 
   it("probes 300dpi even when not listed and uses it if accepted", async () => {

@@ -43,7 +43,7 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
       z
         .string()
         .describe(
-          "Defaults to Lineart (1-bit), which is correct for black-and-white text documents but ruins artwork, photos, and anything with color or shading. Explicitly pass 'Color' (or 'Gray' for grayscale material) for those. A high resolution_dpi does NOT imply color."
+          "color_mode defaults to Lineart (document-first); at >= 600dpi it defaults to Color, since high-dpi capture usually means artwork/photos where 1-bit destroys information. Pass color_mode explicitly to override either default; high dpi is the only signal used."
         )
     ),
     source: nullToUndef(z.enum(["Flatbed", "ADF", "ADF Duplex"])),

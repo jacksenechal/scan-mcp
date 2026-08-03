@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import { execa, type Subprocess, type ExecaError } from "execa";
 import type { AppContext } from "../context.js";
 import type { AppConfig } from "../config.js";
-import { DEFAULT_RESOLUTION_DPI, LETTER_WIDTH_MM, LETTER_HEIGHT_MM, A4_WIDTH_MM, A4_HEIGHT_MM, LEGAL_WIDTH_MM, LEGAL_HEIGHT_MM } from "../constants.js";
+import { DEFAULT_RESOLUTION_DPI, HIGH_RES_COLOR_DEFAULT_DPI, LETTER_WIDTH_MM, LETTER_HEIGHT_MM, A4_WIDTH_MM, A4_HEIGHT_MM, LEGAL_WIDTH_MM, LEGAL_HEIGHT_MM } from "../constants.js";
 import { selectDevice } from "./select.js";
 import { getDeviceOptions } from "./sane.js";
 import { detectCarrierSheet, cropCarrierSheet } from "./carrier.js";
@@ -559,8 +559,8 @@ export async function resolveEffectiveInput(input: StartScanInput, ctx: AppConte
           const match = available.find((m) => m.toLowerCase() === String(out.color_mode).toLowerCase());
           if (match) out.color_mode = match;
         } else {
-          // Prefer Lineart → Gray → Halftone → Color; otherwise first available
-          const pref = ["Lineart", "Gray", "Halftone", "Color"];
+          // resolution_dpi is resolved above, so this sees the effective dpi.
+          const pref = colorModePreference(out.resolution_dpi);
           const selected = pref.find((p) => available.some((m) => m.toLowerCase() === p.toLowerCase())) ?? available[0];
           out.color_mode = selected;
         }
@@ -570,9 +570,20 @@ export async function resolveEffectiveInput(input: StartScanInput, ctx: AppConte
 
   if (!out.source) out.source = "Flatbed";
   if (!out.resolution_dpi) out.resolution_dpi = DEFAULT_RESOLUTION_DPI;
-  if (!out.color_mode) out.color_mode = "Lineart";
+  if (!out.color_mode) out.color_mode = colorModePreference(out.resolution_dpi)[0];
 
   return out;
+}
+
+// scan-mcp is document-first, so an unspecified color_mode defaults to Lineart at ordinary
+// resolutions. At/above HIGH_RES_COLOR_DEFAULT_DPI, requesting that much detail signals
+// capture-everything intent (art/photos), where a Lineart default would destroy information,
+// so the preference flips to Color first. Explicit color_mode requests always win over this.
+function colorModePreference(resolutionDpi: number | undefined): string[] {
+  const effectiveDpi = resolutionDpi ?? DEFAULT_RESOLUTION_DPI;
+  return effectiveDpi >= HIGH_RES_COLOR_DEFAULT_DPI
+    ? ["Color", "Gray", "Halftone", "Lineart"]
+    : ["Lineart", "Gray", "Halftone", "Color"];
 }
 
 async function probeResolution(deviceId: string, dpi: number, config: AppConfig): Promise<boolean> {
