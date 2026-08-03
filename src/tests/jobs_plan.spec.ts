@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import path from "path";
-import { planScanCommands, segmentPages, resolveSourceForDevice } from "../services/jobs.js";
+import { planScanCommands, segmentPages, resolveSourceForDevice, resolveEffectiveInput } from "../services/jobs.js";
 import type { AppConfig } from "../config.js";
 import type { AppContext } from "../context.js";
 import type { Logger } from "pino";
@@ -78,6 +78,18 @@ describe("resolveSourceForDevice", () => {
     expect(() => resolveSourceForDevice("Flatbed", scansnap)).toThrow(
       /Flatbed.*not supported.*ADF Front, ADF Back, ADF Duplex/s
     );
+  });
+});
+
+describe("resolveEffectiveInput color_mode defaulting", () => {
+  it("defaults to Color when only resolution_dpi is specified (600dpi, no color_mode)", async () => {
+    const effective = await resolveEffectiveInput({ resolution_dpi: 600, device_id: "dev" }, ctx);
+    expect(effective.color_mode).toBe("Color");
+  });
+
+  it("still honors an explicit color_mode", async () => {
+    const effective = await resolveEffectiveInput({ color_mode: "Lineart", device_id: "dev" }, ctx);
+    expect(effective.color_mode).toBe("Lineart");
   });
 });
 
