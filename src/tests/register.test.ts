@@ -1,14 +1,16 @@
-import { describe, it, expect, vi, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "fs";
+import os from "os";
 import path from "path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { registerScanServer } from "../server/register.js";
 import type { AppConfig } from "../config.js";
 import type { AppContext } from "../context.js";
 import type { Logger } from "pino";
 import { version } from "../mcp.js";
-
-const tmpCropDir = path.resolve(__dirname, ".tmp-register-crop-carrier");
 
 const baseConfig: AppConfig = {
   SCAN_MOCK: true,
@@ -19,30 +21,44 @@ const baseConfig: AppConfig = {
   SCANIMAGE_BIN: "scanimage",
   TIFFCP_BIN: "tiffcp",
   IM_CONVERT_BIN: "convert",
-  PERSIST_LAST_USED_DEVICE: true,
+  PERSIST_LAST_USED_DEVICE: false,
 };
 
 const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
-const ctx: AppContext = { config: baseConfig, logger };
-
-afterAll(async () => {
-  try {
-    await fs.rm(tmpCropDir, { recursive: true, force: true });
-  } catch {}
-});
 
 describe("registerScanServer", () => {
-  it("registers expected tools and resources", () => {
-    const server = new McpServer({ name: "scan-mcp", version }, { capabilities: { tools: {}, resources: {} } });
+  let server: McpServer;
+  let client: Client;
+  let inboxDir: string;
+
+  beforeEach(async () => {
+    inboxDir = await fs.mkdtemp(path.join(os.tmpdir(), "scan-mcp-register-"));
+    const ctx: AppContext = { config: { ...baseConfig, INBOX_DIR: inboxDir }, logger };
+    server = new McpServer({ name: "scan-mcp", version });
     registerScanServer(server, ctx);
-    const internal = server as unknown as {
-      _registeredTools: Record<string, unknown>;
-      _registeredResourceTemplates: Record<string, unknown>;
-      _registeredResources: Record<string, unknown>;
-      _registeredPrompts: Record<string, unknown>;
-    };
-    const tools = Object.keys(internal._registeredTools);
-    expect(tools).toEqual(
+    client = new Client({ name: "scan-mcp-test", version: "1.0.0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+  });
+
+  afterEach(async () => {
+    try {
+      await client?.close();
+      await server?.close();
+    } finally {
+      if (inboxDir) await fs.rm(inboxDir, { recursive: true, force: true });
+    }
+  });
+
+  it("registers expected tools and resources", async () => {
+    const [tools, templates, resources, prompts] = await Promise.all([
+      client.listTools(),
+      client.listResourceTemplates(),
+      client.listResources(),
+      client.listPrompts(),
+    ]);
+    expect(tools.tools.map((tool) => tool.name)).toEqual(
       expect.arrayContaining([
         "list_devices",
         "get_device_options",
@@ -54,54 +70,48 @@ describe("registerScanServer", () => {
         "get_events",
       ])
     );
-    const resources = Object.keys(internal._registeredResourceTemplates);
-    expect(resources).toEqual(expect.arrayContaining(["manifest", "events"]));
-    const staticResources = Object.keys(internal._registeredResources);
-    expect(staticResources).toEqual(
-      expect.arrayContaining(["mcp://scan-mcp/orientation"])
+    expect(templates.resourceTemplates.map((template) => template.name)).toEqual(
+      expect.arrayContaining(["manifest", "events"])
     );
-    const prompts = Object.keys(internal._registeredPrompts);
-    expect(prompts).toEqual(expect.arrayContaining(["bootstrap_context"]));
+    expect(resources.resources.map((resource) => resource.uri)).toContain("mcp://scan-mcp/orientation");
+    expect(prompts.prompts.map((prompt) => prompt.name)).toContain("bootstrap_context");
+  });
+
+  it("serves orientation text when the resource is read", async () => {
+    const uri = "mcp://scan-mcp/orientation";
+    const result = await client.readResource({ uri });
+    const expectedText = await fs.readFile(path.resolve(__dirname, "../../resources/ORIENTATION.md"), "utf8");
+    expect(result.contents).toEqual([{ uri, mimeType: "text/markdown", text: expectedText }]);
   });
 
   it("get_manifest reports missing file as error", async () => {
-    const server = new McpServer({ name: "scan-mcp", version }, { capabilities: { tools: {}, resources: {} } });
-    registerScanServer(server, ctx);
-    const internal = server as unknown as {
-      _registeredTools: Record<string, { callback: (args: unknown) => Promise<{ isError?: boolean; content: { type: string }[] }> }>;
-    };
-    const tool = internal._registeredTools["get_manifest"];
-    const result = await tool.callback({ job_id: "job-00000000-0000-0000-0000-000000000000" });
+    const result = CallToolResultSchema.parse(await client.callTool({
+      name: "get_manifest",
+      arguments: { job_id: "job-00000000-0000-0000-0000-000000000000" },
+    }));
     expect(result.isError).toBe(true);
-    expect(result.content[0].type).toBe("text");
+    expect(result.content).toEqual([{ type: "text", text: JSON.stringify({ error: "manifest not found" }) }]);
   });
 
   it("start_scan_job accepts crop_carrier_sheets: true and null", async () => {
-    // Use a dedicated INBOX_DIR (rather than tmp_dir on the input) so the
-    // last-used-device state file lands under the test's own tmp dir instead
-    // of the fixed baseConfig.INBOX_DIR (which may not be writable here).
-    const cropCtx: AppContext = { config: { ...baseConfig, INBOX_DIR: tmpCropDir, PERSIST_LAST_USED_DEVICE: false }, logger };
-    const server = new McpServer({ name: "scan-mcp", version }, { capabilities: { tools: {}, resources: {} } });
-    registerScanServer(server, cropCtx);
-    const internal = server as unknown as {
-      _registeredTools: Record<string, { callback: (args: unknown) => Promise<{ content: { type: string; text: string }[] }> }>;
-    };
-    const tool = internal._registeredTools["start_scan_job"];
-
-    const withTrue = await tool.callback({ crop_carrier_sheets: true });
-    expect(JSON.parse(withTrue.content[0].text).state).toBe("completed");
-
-    const withNull = await tool.callback({ crop_carrier_sheets: null });
-    expect(JSON.parse(withNull.content[0].text).state).toBe("completed");
+    for (const cropCarrierSheets of [true, null]) {
+      const result = CallToolResultSchema.parse(await client.callTool({
+        name: "start_scan_job",
+        arguments: { crop_carrier_sheets: cropCarrierSheets },
+      }));
+      expect(result.isError).not.toBe(true);
+      const content = result.content[0];
+      if (content.type !== "text") throw new Error("expected a text tool result");
+      expect(JSON.parse(content.text).state).toBe("completed");
+    }
   });
 
   it("get_manifest rejects malicious job_id", async () => {
-    const server = new McpServer({ name: "scan-mcp", version: "0.1.0" }, { capabilities: { tools: {}, resources: {} } });
-    registerScanServer(server, ctx);
-    const internal = server as unknown as {
-      _registeredTools: Record<string, { callback: (args: unknown) => Promise<unknown> }>;
-    };
-    const tool = internal._registeredTools["get_manifest"];
-    await expect(tool.callback({ job_id: "../etc/passwd" })).rejects.toThrow();
+    const result = CallToolResultSchema.parse(await client.callTool({
+      name: "get_manifest",
+      arguments: { job_id: "../etc/passwd" },
+    }));
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: "text", text: "invalid job_id" }]);
   });
 });
