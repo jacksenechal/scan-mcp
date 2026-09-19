@@ -31,11 +31,17 @@ pack-check:
 test:
 	npm test -- --run
 
+.PHONY: test-swift
+test-swift:
+	@if [ "$$(uname -s)" = Darwin ]; then npm run test:swift; fi
+
 .PHONY: verify
 verify:
+	set -e
 	$(MAKE) install
 	$(MAKE) typecheck
 	$(MAKE) lint
 	$(MAKE) build
 	$(MAKE) pack-check
 	$(MAKE) test
+	$(MAKE) test-swift

@@ -31,6 +31,7 @@ describe("preflight checks", () => {
       LOG_LEVEL: "silent",
       INBOX_DIR: "/tmp/inbox",
       SCAN_MOCK: false,
+      SCAN_BACKEND: "sane",
       SCANIMAGE_BIN: "scanimage",
       TIFFCP_BIN: "tiffcp",
       IM_CONVERT_BIN: "convert",
@@ -93,5 +94,25 @@ describe("preflight checks", () => {
         config: makeConfig(),
       })
     ).not.toThrow();
+  });
+});
+
+describe("ICA preflight", () => {
+  const config = { LOG_LEVEL: "silent", INBOX_DIR: "/tmp", SCAN_MOCK: false,
+    SCAN_BACKEND: "ica", MCP_SCANNER_HELPER_BIN: "/missing/helper", SCANIMAGE_BIN: "scanimage",
+    TIFFCP_BIN: "tiffcp", IM_CONVERT_BIN: "convert", SCAN_EXCLUDE_BACKENDS: [], SCAN_PREFER_BACKENDS: [],
+    PERSIST_LAST_USED_DEVICE: false } satisfies AppConfig;
+
+  it("requires only the native helper for basic macOS scanning", () => {
+    const commandAvailable = vi.fn().mockReturnValue(true);
+    expect(detectMissingDependencies(config, { platform: "darwin", commandAvailable })).toEqual([]);
+    expect(commandAvailable).toHaveBeenCalledExactlyOnceWith("/missing/helper");
+  });
+  it("reports a missing or nonexecutable helper", () => {
+    expect(() => ensureEnvironmentReady({ config, platform: "darwin", osRelease: "24.0.0" })).toThrow(/bundled macOS helper/);
+  });
+  it("rejects unsupported macOS versions and skips dependencies for mock mode", () => {
+    expect(() => ensureEnvironmentReady({ config, platform: "darwin", osRelease: "23.0.0" })).toThrow(/macOS 15/);
+    expect(detectMissingDependencies({ ...config, SCAN_MOCK: true }, { platform: "linux" })).toEqual([]);
   });
 });

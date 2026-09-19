@@ -28,11 +28,12 @@ If no viable devices remain (e.g., only excluded backends), the system’s defau
 ## Resolution Choice
 
 - Target: 300 dpi by default.
-- Probe: `scanimage -n -d <id> --resolution 300` to avoid scanning during capability check.
+- SANE probe: `scanimage -n -d <id> --resolution 300` to avoid scanning during capability check.
   - If supported: use 300.
   - Otherwise: choose the nearest in the advertised list:
     - If any ≤ 300: pick the highest ≤ 300.
     - Else: pick the smallest above 300.
+- ICA uses the selected source’s reported capabilities directly; it does not probe with SANE.
 - In mock mode (`SCAN_MOCK=true`): treat 300 as supported.
 
 ## Color Mode Choice

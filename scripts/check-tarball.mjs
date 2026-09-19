@@ -26,7 +26,8 @@ if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
 const out = run('npm', ['pack', '--json', '--dry-run', '--cache', cacheDir]);
 let payload;
 try {
-  payload = JSON.parse(out);
+  const jsonStart = out.search(/^\s*\[\s*$/m);
+  payload = JSON.parse(out.slice(jsonStart));
 } catch {
   console.error('[check-tarball] could not parse JSON output from npm pack');
   console.error(out);
@@ -47,6 +48,11 @@ const required = [
   'schemas/manifest.schema.json',
   'resources/ORIENTATION.md'
 ];
+
+if (process.platform === 'darwin' || process.env.SCAN_REQUIRE_MACOS_HELPER === '1') {
+  required.push('dist/bin/mcp-scanner-helper', 'dist/notices/NOTICE.md',
+    'dist/notices/LICENSE-scanline', 'dist/notices/LICENSE-argument-parser');
+}
 
 const missing = required.filter(p => !files.includes(p));
 if (missing.length) {

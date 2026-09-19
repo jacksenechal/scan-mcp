@@ -7,7 +7,7 @@
 - `npm test` runs the Vitest suite.
  
 ## Code & Project Conventions
-- See [CONVENTIONS.md](./CONVENTIONS.md) for coding style, project structure, security, and testing guidelines.
+- See [CONVENTIONS.md](./docs/CONVENTIONS.md) for coding style, project structure, security, and testing guidelines.
 
 ## Commit & Pull Request Guidelines
 - Use conventional commit prefixes when practical (`feat:`, `fix:`, `docs:`, etc.).
@@ -26,3 +26,12 @@
 - Network access is allowed for installing packages, fetching docs, or calling external APIs.
 - If the sandbox blocks a command, re-run it with elevated permissions and a brief justification.
 - Do not commit secrets; document required environment variables instead.
+
+## macOS backend
+
+- Scanner backends live in `src/services/backends/`; `AppContext.backend` is selected once at startup.
+- `swift-helper/` contains the Swift 6 / macOS 15+ ImageCaptureCore helper. Preserve `@MainActor` and delegate lifetime handling.
+- `npm run build` builds the universal helper on macOS; `npm run test:swift` runs hardware-free XCTest tests with full Xcode.
+- Wire changes require matching TypeScript parsing and Swift `JSONEventsTests.swift`, `OptionsJSONTests.swift`, and parameter fixtures.
+- Keep stdout JSON-only. Package the helper and third-party notices together. Release publishing on Linux consumes the verified macOS build artifact.
+- This contribution supports TIFF capture/assembly only; OCR and two-pass duplex assembly are separate proposals.

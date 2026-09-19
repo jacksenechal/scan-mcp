@@ -1,3 +1,4 @@
+import { selectBackend } from "./services/backends/index.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import { createLogger } from "./server/logger.js";
@@ -13,7 +14,7 @@ export const version = pkg.version as string;
 const config = loadConfig();
 // Send logs to stderr to keep stdout clean for MCP protocol
 const logger = createLogger("stdio", config.LOG_LEVEL);
-const ctx: AppContext = { config, logger };
+const ctx: AppContext = { config, logger, backend: selectBackend(config) };
 
 export async function main() {
   const server = new McpServer(
