@@ -157,7 +157,6 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     {
       title: "scan-mcp Orientation",
       mimeType: "text/markdown",
-      text: orientationText,
       annotations: {
         audience: ["assistant"],
         priority: 1.0,
