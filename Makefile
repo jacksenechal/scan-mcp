@@ -1,4 +1,4 @@
-SHELL := /usr/bin/bash
+SHELL := $(shell command -v bash)
 .ONESHELL:
 
 # Local dev Makefile for scan-mcp only
