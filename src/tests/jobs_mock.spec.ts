@@ -1,3 +1,4 @@
+import { MockBackend } from "../services/backends/mock.js";
 import { promises as fs } from "fs";
 import path from "path";
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
@@ -20,7 +21,7 @@ const config: AppConfig = {
   PERSIST_LAST_USED_DEVICE: true,
 };
 const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
-const ctx: AppContext = { config, logger };
+const ctx: AppContext = { config, logger, backend: new MockBackend() };
 
 beforeAll(async () => {
   await fs.mkdir(tmpRoot, { recursive: true });
@@ -50,7 +51,8 @@ describe("startScanJob (mock)", () => {
     expect(status.pages).toBeGreaterThan(0);
 
     const cancel = await cancelJob(res.job_id, ctx, tmpRoot);
-    expect(cancel.ok).toBe(true);
+    expect(cancel).toEqual({ ok: false, error: "job is already completed" });
+    expect(await getJobStatus(res.job_id, ctx, tmpRoot)).toMatchObject({ state: "completed" });
   });
 
   it("skips carrier sheet detection entirely (manifest pages have no carrier fields)", async () => {

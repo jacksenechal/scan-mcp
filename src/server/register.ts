@@ -4,7 +4,6 @@ import { fileURLToPath } from "url";
 import { z } from "zod";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppContext } from "../context.js";
-import { listDevices, getDeviceOptions } from "../services/sane.js";
 import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/jobs.js";
 import { resolveJobPath } from "../services/utils.js";
 
@@ -22,15 +21,15 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
   server.tool(
     "list_devices",
     "List connected scanner devices with basic capabilities",
-    async () => ({ content: [{ type: "text", text: JSON.stringify({ devices: await listDevices(ctx) }) }] })
+    async () => ({ content: [{ type: "text", text: JSON.stringify({ devices: await ctx.backend.listDevices(ctx) }) }] })
   );
 
   const GetDeviceOptionsShape = z.object({ device_id: z.string() });
   server.tool(
     "get_device_options",
-    "Get SANE options for a specific device (sources, resolutions, modes)",
+    "Get scanner options for a specific device (sources, resolutions, modes)",
     GetDeviceOptionsShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getDeviceOptions(GetDeviceOptionsShape.parse(args).device_id, ctx)) }] })
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await ctx.backend.getDeviceOptions(GetDeviceOptionsShape.parse(args).device_id, ctx)) }] })
   );
 
   const nullToUndef = <T extends z.ZodTypeAny>(schema: T) => z.preprocess((v) => (v === null ? undefined : v), schema.optional());

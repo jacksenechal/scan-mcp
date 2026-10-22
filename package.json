@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "tsx watch src/mcp.ts",
     "dev:http": "tsx watch src/http-server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && npm run build:helper",
     "prepack": "npm run build",
     "pack:dry": "npm pack --dry-run --cache .npm-cache-pack",
     "pack:check": "node scripts/check-tarball.mjs",
@@ -21,7 +21,9 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest --coverage",
     "test:run": "vitest run --coverage",
-    "verify": "npm run lint && npm run typecheck && npm test"
+    "verify": "npm run lint && npm run typecheck && npm test",
+    "build:helper": "bash scripts/build-helper.sh",
+    "test:swift": "swift test --package-path swift-helper"
   },
   "bin": {
     "scan-mcp": "bin/scan-mcp"

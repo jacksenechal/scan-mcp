@@ -1,3 +1,4 @@
+import { selectBackend } from "./services/backends/index.js";
 import express, { type Request, type Response } from "express";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -16,7 +17,7 @@ const version = pkg.version as string;
 export function startHttpServer(opts: { enableStreamable?: boolean } = {}): HttpServer {
   const config = loadConfig();
   const logger = createLogger("http", config.LOG_LEVEL);
-  const ctx: AppContext = { config, logger };
+  const ctx: AppContext = { config, logger, backend: selectBackend(config) };
   const app = express();
   app.use(express.json({ limit: "4mb" }));
 

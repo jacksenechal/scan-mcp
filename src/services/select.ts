@@ -1,5 +1,5 @@
 import type { AppContext } from "../context.js";
-import { listDevices, getDeviceOptions, type DeviceOptions } from "./sane.js";
+import type { DeviceOptions } from "./backends/backend.js";
 
 export type SelectionInput = {
   desiredSource?: string;
@@ -17,22 +17,22 @@ export async function selectDevice(
   ctx: AppContext,
   lastUsedId?: string
 ): Promise<SelectionResult | null> {
-  const { config } = ctx;
-  const devices = await listDevices(ctx);
+  const { config, backend } = ctx;
+  const devices = await backend.listDevices(ctx);
   if (devices.length === 0) return null;
 
   const results: SelectionResult[] = [];
   for (const d of devices) {
-    const backend = String(d.id.split(":")[0] || "");
-    // Exclude backends outright
-    if (config.SCAN_EXCLUDE_BACKENDS.includes(backend)) {
-      results.push({ deviceId: d.id, score: -Infinity, rationale: ["excluded backend:" + backend] });
+    const backendPrefix = String(d.id.split(":")[0] || "");
+    // Exclude backends outright (only meaningful for SANE-style backend:name device IDs)
+    if (config.SCAN_EXCLUDE_BACKENDS.includes(backendPrefix)) {
+      results.push({ deviceId: d.id, score: -Infinity, rationale: ["excluded backend:" + backendPrefix] });
       continue;
     }
     let score = 0;
     const rationale: string[] = [];
     try {
-      const opts: DeviceOptions = await getDeviceOptions(d.id, ctx);
+      const opts: DeviceOptions = await backend.getDeviceOptions(d.id, ctx);
       const sources = opts.sources ?? [];
       const resolutions = opts.resolutions ?? [];
       const hasAdfDuplex = sources.includes("ADF Duplex");
@@ -50,7 +50,6 @@ export async function selectDevice(
           rationale.push("no ADF support");
         }
       } else {
-        // No explicit preference; reward ADF availability but smaller weight
         if (hasAdfDuplex) {
           score += 40;
           rationale.push("has feeder (duplex)");
@@ -70,17 +69,16 @@ export async function selectDevice(
         rationale.push("duplex capable");
       }
 
-      if (config.SCAN_PREFER_BACKENDS.includes(backend)) {
+      if (config.SCAN_PREFER_BACKENDS.includes(backendPrefix)) {
         score += 5;
-        rationale.push("preferred backend:" + backend);
+        rationale.push("preferred backend:" + backendPrefix);
       }
     } catch {
-      // If options probing fails, lightly penalize but still consider
       score -= 5;
       rationale.push("options probe failed");
     }
 
-    if (backend === "v4l") {
+    if (backendPrefix === "v4l") {
       score -= 100; // treat as camera-like
       rationale.push("camera backend penalty");
     }

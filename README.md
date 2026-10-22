@@ -20,7 +20,7 @@ Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and mul
 - Smart device selection (prefers ADF/duplex, avoids camera backends), robust defaults
 - Local-first transports: stdio by default to keep everything on-device, optional HTTP for your own network deployments
 
-Note: This package targets Node 22 and Linux SANE backends (`scanimage`).
+Requires Node 22+. Linux uses SANE (`scanimage`); macOS 15+ uses a bundled native ImageCaptureCore helper.
 
 ## Quick Start (local stdio, default)
 
@@ -76,15 +76,41 @@ scan-mcp --http
 
 ## System Requirements
 
-- Linux with SANE utilities: `scanimage` (and optionally `scanadf`)
-- TIFF tools: `tiffcp` (preferred) or ImageMagick `convert`
+- Linux: `scanimage`, `tiffcp`, and ImageMagick `convert`.
+- macOS 15+: a scanner supported by Image Capture. The npm package includes a
+  universal (Apple Silicon and Intel) helper for discovery, capture, and multipage
+  TIFF assembly; SANE and `tiffcp` are not needed. Allow scanner/network access in
+  System Settings when prompted. Install ImageMagick separately to use carrier-sheet
+  detection/cropping (`brew install imagemagick`).
+- Building the macOS helper from source requires Swift 6; running its tests requires
+  full Xcode. See [swift-helper/README.md](swift-helper/README.md).
+
+### macOS scanning
+
+The existing `list_devices`, `get_device_options`, and `start_scan_job` tools work
+with the native backend. Options include per-source resolutions and color modes
+for multifunction scanners. Output is TIFF only: individual page files and complete
+multipage documents respecting the page-count break policy. PDF/OCR and two-pass
+simplex assembly are separate future proposals.
+
+Flatbed and ADF capture support named Letter, A4, and Legal sizes when the hardware
+allows them, including hardware duplex. Custom dimensions are explicitly rejected.
+The default source is the feeder when available. Use `SCAN_BACKEND=sane` to retain
+an existing SANE installation on macOS.
+
+The CI/release helper is ad-hoc signed, not Developer ID signed or notarized.
+See the helper README for signing configuration and the remaining hardware smoke
+check before release.
 
 ## Environment Variables
 
-- `SCAN_MOCK` (default: `false`): mock SANE calls and generate fake TIFFs for testing.
+- `SCAN_MOCK` (default: `false`): use the mock backend and generate fake TIFFs for testing.
+- `SCAN_BACKEND` (optional): `ica` on macOS or `sane`; defaults to ICA on macOS and SANE elsewhere.
+- `MCP_SCANNER_HELPER_BIN` (optional): path to a custom ICA helper; a missing override fails explicitly.
 - `INBOX_DIR` (default: `scanned_documents/inbox`): base directory for job runs and artifacts.
 - `SCANIMAGE_BIN` / `SCANADF_BIN` (defaults: `scanimage` / `scanadf`): override binary paths.
-- `TIFFCP_BIN` / `IM_CONVERT_BIN` (defaults: `tiffcp` / `convert`): multipage assembly tools.
+- `TIFFCP_BIN` (default `tiffcp`): SANE multipage assembly.
+- `IM_CONVERT_BIN` (default `convert`): ImageMagick for carrier-sheet detection/cropping.
 - `SCAN_EXCLUDE_BACKENDS` (CSV): backends to exclude (e.g., `v4l`).
 - `SCAN_PREFER_BACKENDS` (CSV): preferred backends (e.g., `epjitsu,epson2`).
 - `PERSIST_LAST_USED_DEVICE` (default: `true`): persist and lightly prefer last used device.
@@ -99,7 +125,7 @@ scan-mcp --http
   - Inputs: none.
 
 - **get_device_options**
-  - Get SANE options for a specific device.
+  - Get scanner options for a specific device.
   - Inputs:
     - `device_id` (string): Target device identifier.
 
@@ -127,7 +153,7 @@ scan-mcp --http
     - `job_id` (string)
 
 - **cancel_job**
-  - Request job cancellation; best effort during scan loops.
+  - Request cancellation during capture or assembly. Completed and failed jobs reject cancellation; repeated cancellation of a cancelled job is harmless.
   - Inputs:
     - `job_id` (string)
 

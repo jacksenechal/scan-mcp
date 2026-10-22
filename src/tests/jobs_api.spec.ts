@@ -1,3 +1,4 @@
+import { MockBackend } from "../services/backends/mock.js";
 import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -28,7 +29,7 @@ describe("jobs api", () => {
     PERSIST_LAST_USED_DEVICE: true,
   };
   const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
-  const ctx: AppContext = { config, logger };
+  const ctx: AppContext = { config, logger, backend: new MockBackend() };
 
   beforeAll(() => {
     fs.mkdirSync(tmpInboxDir, { recursive: true });
@@ -55,12 +56,12 @@ describe("jobs api", () => {
     expect(status.state).toBe("completed");
   });
 
-  it("should cancel a job", async () => {
+  it("should preserve a completed job when cancellation is requested", async () => {
     const { job_id } = await startScanJob({}, ctx);
     const result = await cancelJob(job_id, ctx);
-    expect(result.ok).toBe(true);
+    expect(result).toEqual({ ok: false, error: "job is already completed" });
     const status = await getJobStatus(job_id, ctx);
-    expect(status.state).toBe("cancelled");
+    expect(status.state).toBe("completed");
   });
 
   it("should list jobs", async () => {

@@ -24,3 +24,7 @@ scanned_documents/
 # Local Files
 .env
 
+
+# Swift helper build products
+swift-helper/.build/
+swift-helper/.swiftpm/

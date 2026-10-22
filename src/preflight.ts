@@ -1,3 +1,5 @@
+import { backendName } from "./services/backends/index.js";
+import { resolveHelperPath } from "./services/helper-path.js";
 import os from "os";
 import path from "path";
 import { spawnSync } from "child_process";
@@ -7,7 +9,7 @@ import type { AppConfig } from "./config.js";
 
 const MIN_NODE_MAJOR_VERSION = 22;
 
-type CommandEnvVar = "SCANIMAGE_BIN" | "TIFFCP_BIN" | "IM_CONVERT_BIN";
+type CommandEnvVar = "SCANIMAGE_BIN" | "TIFFCP_BIN" | "IM_CONVERT_BIN" | "MCP_SCANNER_HELPER_BIN";
 
 type RequiredTool = {
   envVar: CommandEnvVar;
@@ -25,11 +27,13 @@ export type MissingDependency = RequiredTool & { command: string };
 
 export interface DetectMissingDependenciesOptions {
   commandAvailable?: (command: string) => boolean;
+  platform?: NodeJS.Platform;
 }
 
 export type PreflightErrorDetails =
   | { type: "node-version"; requiredMajor: number; currentVersion: string }
-  | { type: "missing-dependencies"; missing: MissingDependency[] };
+  | { type: "missing-dependencies"; missing: MissingDependency[] }
+  | { type: "macos-version"; release: string };
 
 export class PreflightError extends Error {
   public readonly code = "SCAN_MCP_PREFLIGHT_FAILED" as const;
@@ -47,6 +51,8 @@ export interface EnsureEnvironmentOptions {
   config?: AppConfig;
   skipCommandCheck?: boolean;
   verbose?: boolean;
+  platform?: NodeJS.Platform;
+  osRelease?: string;
 }
 
 export function ensureEnvironmentReady(options: EnsureEnvironmentOptions = {}): void {
@@ -84,11 +90,17 @@ export function ensureEnvironmentReady(options: EnsureEnvironmentOptions = {}): 
   }
 
   const config = options.config ?? loadConfig();
-  const missing = detectMissingDependencies(config);
+  const platform = options.platform ?? process.platform;
+  const backend = backendName(config, platform);
+  const release = options.osRelease ?? os.release();
+  if (backend === "ica" && Number.parseInt(release, 10) < 24) {
+    throw new PreflightError("The ICA backend requires macOS 15 or newer. Use SCAN_BACKEND=sane for an existing SANE installation.", { type: "macos-version", release });
+  }
+  const missing = detectMissingDependencies(config, { platform });
 
   if (verbose) {
     // Check each tool individually for detailed output
-    for (const tool of REQUIRED_TOOLS) {
+    for (const tool of requiredTools(config, platform)) {
       const isMissing = missing.some(m => m.envVar === tool.envVar);
       if (isMissing) {
         console.log(`✗ ${tool.description}`);
@@ -105,12 +117,14 @@ export function ensureEnvironmentReady(options: EnsureEnvironmentOptions = {}): 
         `  • ${dep.description} [${dep.envVar}=${dep.command || dep.defaultCommand}]`
       ),
       "",
+      ...(backend === "ica" ? ["Reinstall scan-mcp with its bundled macOS helper, or run npm run build:helper in a source checkout."] : [
       "Install SANE utilities and TIFF tools before continuing:",
       "  Ubuntu/Debian: sudo apt install sane-utils libtiff-tools imagemagick",
       "  Arch Linux:    sudo pacman -S sane libtiff imagemagick",
       "  Fedora:        sudo dnf install sane-backends-utils libtiff-tools ImageMagick",
       "",
       "If the tools live elsewhere, set SCANIMAGE_BIN, TIFFCP_BIN, or IM_CONVERT_BIN to point at them.",
+      ]),
     ].join("\n");
     throw new PreflightError(message, { type: "missing-dependencies", missing });
   }
@@ -120,14 +134,22 @@ export function ensureEnvironmentReady(options: EnsureEnvironmentOptions = {}): 
   }
 }
 
+function requiredTools(config: AppConfig, platform: NodeJS.Platform): readonly RequiredTool[] {
+  switch (backendName(config, platform)) {
+    case "mock": return [];
+    case "ica": return [{ envVar: "MCP_SCANNER_HELPER_BIN", defaultCommand: "mcp-scanner-helper", description: "macOS scanner helper" }];
+    case "sane": return REQUIRED_TOOLS;
+  }
+}
+
 export function detectMissingDependencies(
   config: AppConfig,
   options: DetectMissingDependenciesOptions = {}
 ): MissingDependency[] {
   const isAvailable = options.commandAvailable ?? isCommandAvailable;
   const missing: MissingDependency[] = [];
-  for (const tool of REQUIRED_TOOLS) {
-    const configured = (config[tool.envVar] ?? "").trim();
+  for (const tool of requiredTools(config, options.platform ?? process.platform)) {
+    const configured = (tool.envVar === "MCP_SCANNER_HELPER_BIN" ? resolveHelperPath(config) : config[tool.envVar] ?? "").trim();
     if (!configured || !isAvailable(configured)) {
       missing.push({ ...tool, command: configured || tool.defaultCommand });
     }
