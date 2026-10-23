@@ -54,4 +54,16 @@ describe("SANE job outcomes", () => {
     await expect(fs.access(path.join(job.run_dir, "doc_0001.tiff"))).rejects.toThrow();
     expect((await events(job.run_dir)).map((e) => e.type)).toContain("job_error");
   });
+
+  it.each([
+    ["the default document policy", undefined],
+    ["a page_count policy", { type: "page_count" as const, page_count: 2 }],
+  ])("ends as error when the scanner produces no pages (%s)", async (_label, doc_break_policy) => {
+    const ctx = makeCtx();
+    const job = await startScanJob({ device_id: "empty", doc_break_policy }, ctx);
+    expect(job.state).toBe("error");
+    expect(await getJobStatus(job.job_id, ctx)).toMatchObject({ state: "error", pages: 0, documents: 0 });
+    const failed = (await events(job.run_dir)).find((e) => e.type === "job_error");
+    expect(failed?.data?.reason).toContain("Scanner produced no pages");
+  });
 });
