@@ -5,6 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config.js";
 import { registerScanServer } from "./server/register.js";
+import { selectBackend } from "./services/backends/index.js";
 import type { AppContext } from "./context.js";
 import pkg from "../package.json" with { type: "json" };
 
@@ -13,7 +14,7 @@ export const version = pkg.version as string;
 const config = loadConfig();
 // Send logs to stderr to keep stdout clean for MCP protocol
 const logger = createLogger("stdio", config.LOG_LEVEL);
-const ctx: AppContext = { config, logger };
+const ctx: AppContext = { config, logger, backend: selectBackend(config) };
 
 export async function main() {
   const server = new McpServer(

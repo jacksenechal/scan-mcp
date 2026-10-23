@@ -1,3 +1,4 @@
+import { MockBackend } from "../services/backends/mock.js";
 import { describe, it, expect, vi } from "vitest";
 import {
   parseGrayProfile,
@@ -216,7 +217,7 @@ describe("detectCarrierSheet error containment", () => {
       PERSIST_LAST_USED_DEVICE: false,
     };
     const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
-    const ctx: AppContext = { config, logger };
+    const ctx: AppContext = { config, logger, backend: new MockBackend() };
 
     await expect(detectCarrierSheet("/tmp/does-not-matter.tiff", ctx)).rejects.toThrow();
   });

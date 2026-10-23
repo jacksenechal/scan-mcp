@@ -1,3 +1,4 @@
+import { MockBackend } from "../services/backends/mock.js";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "fs";
 import os from "os";
@@ -33,7 +34,7 @@ describe("registerScanServer", () => {
 
   beforeEach(async () => {
     inboxDir = await fs.mkdtemp(path.join(os.tmpdir(), "scan-mcp-register-"));
-    const ctx: AppContext = { config: { ...baseConfig, INBOX_DIR: inboxDir }, logger };
+    const ctx: AppContext = { config: { ...baseConfig, INBOX_DIR: inboxDir }, logger, backend: new MockBackend() };
     server = new McpServer({ name: "scan-mcp", version });
     registerScanServer(server, ctx);
     client = new Client({ name: "scan-mcp-test", version: "1.0.0" });
