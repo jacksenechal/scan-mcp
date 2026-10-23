@@ -1,3 +1,4 @@
+import { MockBackend } from "../services/backends/mock.js";
 import { promises as fs } from "fs";
 import path from "path";
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
@@ -20,7 +21,7 @@ const config: AppConfig = {
   PERSIST_LAST_USED_DEVICE: true,
 };
 const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
-const ctx: AppContext = { config, logger };
+const ctx: AppContext = { config, logger, backend: new MockBackend() };
 
 beforeAll(async () => {
   await fs.mkdir(tmpRoot, { recursive: true });

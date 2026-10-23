@@ -1,5 +1,6 @@
 import { promises as fs } from "fs";
 import path from "path";
+import type { ExecaError } from "execa";
 
 const DEFAULT_BYTE_WINDOW = 64 * 1024; // 64 KiB
 
@@ -34,4 +35,13 @@ export function resolveJobPath(jobId: string, baseDir: string): string {
   const full = path.resolve(base, jobId);
   if (!full.startsWith(base + path.sep)) throw new Error("invalid job_id");
   return full;
+}
+
+export function isExecaError(e: unknown): e is ExecaError {
+  return typeof e === "object" && e !== null && "shortMessage" in e && "exitCode" in e;
+}
+
+export function isNodeError(e: unknown): e is NodeJS.ErrnoException {
+  if (!(e instanceof Error)) return false;
+  return typeof e === "object" && e !== null && "code" in e;
 }
