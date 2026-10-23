@@ -20,6 +20,9 @@ beforeEach(async () => {
 });
 afterEach(async () => { vi.restoreAllMocks(); await fs.rm(dir, { recursive: true, force: true }); });
 
+// Pauses the first write for which `matches(file, data)` holds, until release() is called.
+// Manifests are written atomically (temp file, then rename), so a write to "<file>.tmp" is
+// matched as a write of <file>; a direct write to manifest.json fails the test loudly.
 function blockWrite(matches: (file: string, data: string) => boolean) {
   let release!: () => void;
   let enter!: (file: string) => void;
@@ -27,7 +30,9 @@ function blockWrite(matches: (file: string, data: string) => boolean) {
   const entered = new Promise<string>(resolve => { enter = resolve; });
   const write = fs.writeFile;
   vi.spyOn(fs, "writeFile").mockImplementation(async (file, data, options) => {
-    if (matches(String(file), String(data))) { enter(String(file)); await blocked; }
+    if (String(file).endsWith("manifest.json")) throw new Error("manifest.json must be written via a temp file and rename");
+    const target = String(file).replace(/\.tmp$/, "");
+    if (matches(target, String(data))) { enter(target); await blocked; }
     return write(file, data, options);
   });
   return { entered, release };

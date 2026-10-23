@@ -45,3 +45,16 @@ export function isNodeError(e: unknown): e is NodeJS.ErrnoException {
   if (!(e instanceof Error)) return false;
   return typeof e === "object" && e !== null && "code" in e;
 }
+
+// Replace `file` atomically: write a sibling temp file, then rename it into place, so a
+// concurrent reader sees either the old content or the new, never a truncated file.
+export async function writeFileAtomic(file: string, data: string): Promise<void> {
+  const tmp = `${file}.tmp`;
+  try {
+    await fs.writeFile(tmp, data);
+    await fs.rename(tmp, file);
+  } catch (err) {
+    await fs.rm(tmp, { force: true });
+    throw err;
+  }
+}
