@@ -88,5 +88,8 @@ describe("SANE job outcomes", () => {
     ]);
     expect(manifest.documents).toEqual([]);
     expect((await fs.readdir(runDir)).filter((f) => f.endsWith(".part"))).toEqual([]);
+    expect((await events(runDir)).map((e) => e.type)).toEqual([
+      "job_started", "scanner_exec", "page_scanned", "job_cancelled",
+    ]);
   });
 });
