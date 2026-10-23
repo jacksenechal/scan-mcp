@@ -33,12 +33,13 @@ export class MockBackend implements Backend {
   }
 
   async runScan(args: RunScanArgs): Promise<RunScanResult> {
-    const { runDir } = args;
+    const { runDir, onEvent } = args;
     // Create a couple of fake TIFFs to simulate capture
     const pageCount = 2;
     for (let i = 1; i <= pageCount; i++) {
       const p = path.join(runDir, `page_${String(i).padStart(4, "0")}.tiff`);
       await fs.writeFile(p, `MOCK_TIFF_PAGE_${i}`);
+      await onEvent({ type: "page_scanned", index: i, path: p });
     }
     return { ran: true };
   }
