@@ -56,12 +56,12 @@ describe("jobs api", () => {
     expect(status.state).toBe("completed");
   });
 
-  it("should cancel a job", async () => {
+  it("should preserve a completed job when cancellation is requested", async () => {
     const { job_id } = await startScanJob({}, ctx);
     const result = await cancelJob(job_id, ctx);
-    expect(result.ok).toBe(true);
+    expect(result).toEqual({ ok: false, error: "job is already completed" });
     const status = await getJobStatus(job_id, ctx);
-    expect(status.state).toBe("cancelled");
+    expect(status.state).toBe("completed");
   });
 
   it("should list jobs", async () => {
