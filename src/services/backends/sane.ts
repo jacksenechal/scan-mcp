@@ -1,4 +1,4 @@
-import { createWriteStream, type WriteStream } from "fs";
+import { promises as fs, createWriteStream, type WriteStream } from "fs";
 import path from "path";
 import { execa, type ExecaError } from "execa";
 import type { AppContext } from "../../context.js";
@@ -136,7 +136,17 @@ export class SaneBackend implements Backend {
         try { errStream?.end(); } catch {}
       }
     }
+    // scanimage --batch renames each page into place when it is complete and removes the
+    // in-progress file on cancel, so whatever matches here is finished, even after a failure.
+    await reportCompletedPages(runDir, onEvent);
     return { ran };
+  }
+}
+
+async function reportCompletedPages(runDir: string, onEvent: RunScanArgs["onEvent"]): Promise<void> {
+  const pageFiles = (await fs.readdir(runDir)).filter((f) => /^page_\d+\.tiff$/.test(f)).sort();
+  for (const [i, file] of pageFiles.entries()) {
+    await onEvent({ type: "page_scanned", index: i + 1, path: path.join(runDir, file) });
   }
 }
 

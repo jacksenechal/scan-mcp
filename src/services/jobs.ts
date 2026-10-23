@@ -70,19 +70,7 @@ function isNodeError(e: unknown): e is NodeJS.ErrnoException {
 }
 
 async function processPages(runDir: string, manifest: Manifest, ctx: AppContext, eventsPath: string, signal: AbortSignal) {
-  const entries = await fs.readdir(runDir);
-  const pageFiles = entries
-    .filter((f) => f.startsWith("page_") && f.endsWith(".tiff") && !f.endsWith(".cropped.tiff"))
-    .sort();
-  for (let idx = 0; idx < pageFiles.length; idx++) {
-    const f = pageFiles[idx];
-    const p = path.join(runDir, f);
-    // Pages already reported via page_scanned are in the manifest; don't count them twice.
-    if (!manifest.pages.some((page) => page.path === p)) {
-      manifest.pages.push({ index: idx + 1, path: p, sha256: await hashFile(p) });
-    }
-  }
-
+  // manifest.pages was filled from the backend's page_scanned events.
   if (manifest.pages.length === 0) throw new Error("Scanner produced no pages");
   signal.throwIfAborted();
   await detectAndCropCarrierSheets(manifest, ctx, eventsPath, signal);

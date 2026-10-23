@@ -1,12 +1,13 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "fs";
+import crypto from "crypto";
 import os from "os";
 import path from "path";
 import type { Logger } from "pino";
 import type { AppContext } from "../context.js";
 import { ConfigSchema, type AppConfig } from "../config.js";
 import { SaneBackend } from "../services/backends/sane.js";
-import { startScanJob, getJobStatus } from "../services/jobs.js";
+import { startScanJob, cancelJob, getJobStatus } from "../services/jobs.js";
 
 // End-to-end job tests driven by the fake scanimage in fixtures/sane-scanner.mjs, whose
 // behavior is selected by device_id.
@@ -65,5 +66,37 @@ describe("SANE job outcomes", () => {
     expect(await getJobStatus(job.job_id, ctx)).toMatchObject({ state: "error", pages: 0, documents: 0 });
     const failed = (await events(job.run_dir)).find((e) => e.type === "job_error");
     expect(failed?.data?.reason).toContain("Scanner produced no pages");
+  });
+
+  it("keeps finished pages when the scan fails midway", async () => {
+    const ctx = makeCtx();
+    const job = await startScanJob({ device_id: "page-fail" }, ctx);
+    expect(job.state).toBe("error");
+    expect(await getJobStatus(job.job_id, ctx)).toMatchObject({ pages: 1, documents: 0 });
+  });
+
+  it("keeps finished pages, and drops the in-progress one, when cancelled", async () => {
+    const ctx = makeCtx();
+    const pending = startScanJob({ device_id: "page-wait" }, ctx);
+    // The fixture writes scanner-started once page 1 is complete and page 2 is under way.
+    let runDir = "";
+    await vi.waitFor(async () => {
+      const [jobId] = await fs.readdir(ctx.config.INBOX_DIR);
+      runDir = path.join(ctx.config.INBOX_DIR, jobId);
+      await fs.access(path.join(runDir, "scanner-started"));
+    }, { timeout: 3000 });
+    expect(await cancelJob(path.basename(runDir), ctx)).toEqual({ ok: true });
+    const job = await pending;
+    expect(job.state).toBe("cancelled");
+    const manifest = JSON.parse(await fs.readFile(path.join(runDir, "manifest.json"), "utf8"));
+    expect(manifest.pages).toEqual([
+      {
+        index: 1,
+        path: path.join(runDir, "page_0001.tiff"),
+        sha256: crypto.createHash("sha256").update("PAGE_1").digest("hex"),
+      },
+    ]);
+    expect(manifest.documents).toEqual([]);
+    expect((await fs.readdir(runDir)).filter((f) => f.endsWith(".part"))).toEqual([]);
   });
 });
