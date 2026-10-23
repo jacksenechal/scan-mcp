@@ -10,7 +10,7 @@ import type { StartScanInput } from "./backends/backend.js";
 export type { StartScanInput } from "./backends/backend.js";
 import { detectCarrierSheet, cropCarrierSheet } from "./carrier.js";
 
-import { resolveJobPath } from "./utils.js";
+import { resolveJobPath, writeFileAtomic } from "./utils.js";
 
 // A job stays here until its terminal state is persisted, so a late cancel_job can see
 // the committed outcome instead of racing a stale "running" manifest.
@@ -143,7 +143,7 @@ async function detectAndCropCarrierSheets(manifest: Manifest, ctx: AppContext, e
 
 async function updateManifest(runDir: string, manifest: Manifest) {
   const manifestPath = path.join(runDir, "manifest.json");
-  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  await writeFileAtomic(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
 export async function startScanJob(input: StartScanInput, ctx: AppContext): Promise<StartScanResult> {
@@ -245,7 +245,7 @@ export async function cancelJob(jobId: string, ctx: AppContext, baseDir?: string
   const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
   if (manifest.state !== "running") return terminalCancellationResult(manifest.state);
   manifest.state = "cancelled";
-  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  await writeFileAtomic(manifestPath, JSON.stringify(manifest, null, 2));
   await appendEvent(path.join(runDir, "events.jsonl"), { ts: new Date().toISOString(), type: "job_cancelled" });
   logger.debug({ jobId }, "scan job cancelled");
   return { ok: true } as const;
