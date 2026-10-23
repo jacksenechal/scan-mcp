@@ -56,6 +56,15 @@ describe("SANE job outcomes", () => {
     expect((await events(job.run_dir)).map((e) => e.type)).toContain("job_error");
   });
 
+  it("keeps child-process output out of the job_error reason", async () => {
+    const ctx = makeCtx({ TIFFCP_BIN: path.resolve(__dirname, "fixtures/noisy-failure.mjs") });
+    const job = await startScanJob({ device_id: "success" }, ctx);
+    expect(job.state).toBe("error");
+    const reason = String((await events(job.run_dir)).find((e) => e.type === "job_error")?.data?.reason);
+    expect(reason).toContain("exit code 1");
+    expect(reason).not.toContain("NOISY");
+  });
+
   it.each([
     ["the default document policy", undefined],
     ["a page_count policy", { type: "page_count" as const, page_count: 2 }],
