@@ -29,7 +29,7 @@ These defaults are applied after device/capabilities are known. If the user supp
 - `get_device_options { device_id }`: Detailed options (sources/resolutions/modes).
 - `start_scan_job { ... }`: Start a scan (auto-select device and fill defaults if params omitted).
 - `get_job_status { job_id }`: Poll job state and artifact counts.
-- `cancel_job { job_id }`: Stop a running scan (`ok:false` if the job already completed or failed).
+- `cancel_job { job_id }`: Stop a running scan (`ok:false` if the job already completed or failed). Completed pages are kept.
 - `list_jobs { limit?, state? }`: Recent jobs under the inbox directory.
 - `get_manifest { job_id }`: Fetch raw manifest JSON for a job.
 - `get_events { job_id }`: Fetch raw events JSONL for a job.
