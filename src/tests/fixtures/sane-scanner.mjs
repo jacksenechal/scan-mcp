@@ -11,6 +11,8 @@ if (mode === 'wait' || mode === 'stubborn') {
 } else if (mode === 'failure') {
   process.stderr.write('paper jam\n');
   process.exitCode = 2;
+} else if (mode === 'empty') {
+  // Exits successfully without producing any page.
 } else {
   const pattern = process.argv.find(arg => arg.startsWith('--batch=')).slice('--batch='.length);
   fs.writeFileSync(path.resolve(pattern.replace('%04d', '0001')), 'PAGE_1');

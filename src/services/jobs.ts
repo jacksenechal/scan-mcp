@@ -79,6 +79,7 @@ async function processPages(runDir: string, manifest: Manifest, ctx: AppContext,
     }
   }
 
+  if (manifest.pages.length === 0) throw new Error("Scanner produced no pages");
   signal.throwIfAborted();
   await detectAndCropCarrierSheets(manifest, ctx, eventsPath, signal);
 
