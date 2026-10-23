@@ -1,3 +1,4 @@
+import { MockBackend } from "../services/backends/mock.js";
 import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
 import fs from "fs";
 import path from "path";
@@ -28,7 +29,7 @@ describe("integration tests", () => {
     PERSIST_LAST_USED_DEVICE: true,
   };
   const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
-  const ctx: AppContext = { config, logger };
+  const ctx: AppContext = { config, logger, backend: new MockBackend() };
 
   beforeAll(() => {
     fs.mkdirSync(tmpInboxDir, { recursive: true });
