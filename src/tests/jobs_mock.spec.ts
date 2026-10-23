@@ -51,7 +51,8 @@ describe("startScanJob (mock)", () => {
     expect(status.pages).toBeGreaterThan(0);
 
     const cancel = await cancelJob(res.job_id, ctx, tmpRoot);
-    expect(cancel.ok).toBe(true);
+    expect(cancel).toEqual({ ok: false, error: "job is already completed" });
+    expect(await getJobStatus(res.job_id, ctx, tmpRoot)).toMatchObject({ state: "completed" });
   });
 
   it("skips carrier sheet detection entirely (manifest pages have no carrier fields)", async () => {

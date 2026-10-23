@@ -48,7 +48,10 @@ export type StartScanInput = {
 // so the backend stays decoupled from the persistence format.
 export type BackendEvent =
   | { type: "scanner_exec"; data: Record<string, unknown> }
-  | { type: "scanner_failed"; data: Record<string, unknown> };
+  | { type: "scanner_failed"; data: Record<string, unknown> }
+  // A page file is complete on disk and safe to inventory. Pages reported here are kept
+  // in the manifest even if the job is later cancelled or fails.
+  | { type: "page_scanned"; index: number; path: string };
 
 export type RunScanArgs = {
   input: StartScanInput;
@@ -70,8 +73,8 @@ export interface Backend {
   // events via onEvent. Respects signal.aborted by terminating any active subprocess.
   runScan(args: RunScanArgs): Promise<RunScanResult>;
   // Combines per-page TIFFs into one multipage document at `output`. Throws on failure
-  // and never substitutes a partial result.
-  assembleTiff(pages: string[], output: string, ctx: AppContext): Promise<void>;
+  // and never substitutes a partial result. Terminates its subprocess on abort.
+  assembleTiff(pages: string[], output: string, ctx: AppContext, signal: AbortSignal): Promise<void>;
   // Optional: backend-specific probe of whether a given resolution is accepted by the
   // device. SANE supports this via `scanimage -n`. Backends without a cheap probe
   // should leave undefined; callers fall back to the listed resolutions.

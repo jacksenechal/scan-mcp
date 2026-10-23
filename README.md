@@ -129,7 +129,8 @@ scan-mcp --http
     - `job_id` (string)
 
 - **cancel_job**
-  - Request job cancellation; best effort during scan loops.
+  - Cancel a running job. The scanner process is terminated (SIGTERM, then SIGKILL if it ignores it) and the job ends as `cancelled`.
+  - Returns `{ ok: true }` once the cancel is accepted (`get_job_status` may show `running` briefly, until the scanner process exits); repeating it on a cancelled job is harmless. Returns `{ ok: false, error }` if the job has already `completed` or ended in `error`, or does not exist.
   - Inputs:
     - `job_id` (string)
 
