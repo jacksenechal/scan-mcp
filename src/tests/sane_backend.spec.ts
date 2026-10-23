@@ -35,15 +35,15 @@ describe("SaneBackend", () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it("falls back to copying the first page when tiffcp fails", async () => {
+  it("rejects instead of substituting the first page when tiffcp fails", async () => {
     const ctx = makeCtx({ TIFFCP_BIN: "false" });
     const page1 = path.join(dir, "page_0001.tiff");
     const page2 = path.join(dir, "page_0002.tiff");
     const out = path.join(dir, "doc_0001.tiff");
     await fs.writeFile(page1, "one");
     await fs.writeFile(page2, "two");
-    await ctx.backend.assembleTiff([page1, page2], out, ctx, new AbortController().signal);
-    expect(await fs.readFile(out, "utf8")).toBe("one");
+    await expect(ctx.backend.assembleTiff([page1, page2], out, ctx, new AbortController().signal)).rejects.toThrow();
+    await expect(fs.access(out)).rejects.toThrow();
   });
 
   it("reports scanner_failed and ran=false when scanimage fails", async () => {

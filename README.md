@@ -123,6 +123,7 @@ scan-mcp --http
 
 - **get_job_status**
   - Inspect job state and artifact counts.
+  - A job ends as `completed`, `cancelled`, or `error`. If TIFF assembly (`tiffcp`) fails, the job is `error` and the raw `page_NNNN.tiff` files are kept; no partial document is substituted.
   - Inputs:
     - `job_id` (string)
 

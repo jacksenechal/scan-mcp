@@ -1,4 +1,4 @@
-import { promises as fs, createWriteStream, type WriteStream } from "fs";
+import { createWriteStream, type WriteStream } from "fs";
 import path from "path";
 import { execa, type ExecaError } from "execa";
 import type { AppContext } from "../../context.js";
@@ -68,12 +68,8 @@ export class SaneBackend implements Backend {
   }
 
   async assembleTiff(pages: string[], output: string, ctx: AppContext, signal: AbortSignal): Promise<void> {
-    try {
-      await execa(ctx.config.TIFFCP_BIN, [...pages, output], { shell: false, cancelSignal: signal, forceKillAfterDelay: FORCE_KILL_AFTER_MS });
-    } catch {
-      // Fallback: copy the first page
-      await fs.copyFile(pages[0], output);
-    }
+    // A failure must propagate: substituting one page for the document would silently lose the rest.
+    await execa(ctx.config.TIFFCP_BIN, [...pages, output], { shell: false, cancelSignal: signal, forceKillAfterDelay: FORCE_KILL_AFTER_MS });
   }
 
   async runScan(args: RunScanArgs): Promise<RunScanResult> {

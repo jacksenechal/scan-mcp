@@ -76,7 +76,8 @@ export interface Backend {
   // events via onEvent. Respects signal.aborted by terminating any active subprocess.
   runScan(args: RunScanArgs): Promise<RunScanResult>;
   // Combines per-page TIFFs into one multipage document at `output`. Terminates its
-  // subprocess on abort.
+  // subprocess on abort. Throws on failure and never substitutes a partial result; the job
+  // then ends as `error` with its raw pages preserved.
   assembleTiff(pages: string[], output: string, ctx: AppContext, signal: AbortSignal): Promise<void>;
   // Optional: backend-specific probe of whether a given resolution is accepted by the
   // device. SANE supports this via `scanimage -n`. Backends without a cheap probe
