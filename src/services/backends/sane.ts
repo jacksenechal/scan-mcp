@@ -100,6 +100,11 @@ export class SaneBackend implements Backend {
         ran = true;
         break;
       } catch (err) {
+        if (signal.aborted) {
+          // A user cancel is not a scanner failure; don't record it as one.
+          logger.debug({ cmd: c, runDir }, "scanner command cancelled");
+          break;
+        }
         const stderrTail = await tailTextFile(errPath, 120);
         const stdoutTail = await tailTextFile(outPath, 60);
 
