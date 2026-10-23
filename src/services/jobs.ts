@@ -10,7 +10,7 @@ import type { StartScanInput } from "./backends/backend.js";
 export type { StartScanInput } from "./backends/backend.js";
 import { detectCarrierSheet, cropCarrierSheet } from "./carrier.js";
 
-import { resolveJobPath, isExecaError, isNodeError, writeFileAtomic } from "./utils.js";
+import { errorSummary, resolveJobPath, isExecaError, isNodeError, writeFileAtomic } from "./utils.js";
 
 // A job stays here until its terminal state is persisted, so a late cancel_job can see
 // the committed outcome instead of racing a stale "running" manifest.
@@ -147,7 +147,7 @@ async function detectAndCropCarrierSheets(manifest: Manifest, ctx: AppContext, e
       await appendEvent(eventsPath, {
         ts: new Date().toISOString(),
         type: "carrier_detection_skipped",
-        data: { page: page.index, reason: String(err) },
+        data: { page: page.index, reason: errorSummary(err) },
       });
       if (isNodeError(err) && err.code === "ENOENT") break;
     }
@@ -198,7 +198,7 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
         manifest.state = "cancelled";
       } else {
         manifest.state = "error";
-        failure = String(error);
+        failure = errorSummary(error);
         logger.error({ jobId: manifest.job_id, error: failure }, "scan job failed");
       }
     }

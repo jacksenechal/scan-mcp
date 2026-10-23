@@ -58,3 +58,12 @@ export async function writeFileAtomic(file: string, data: string): Promise<void>
     throw err;
   }
 }
+
+// A short, single-line description of an error. execa puts the child's buffered
+// stdout/stderr into `message`; `shortMessage` is just the command and how it failed.
+export function errorSummary(err: unknown): string {
+  if (typeof err === "object" && err !== null && "shortMessage" in err && typeof err.shortMessage === "string") {
+    return err.shortMessage;
+  }
+  return err instanceof Error ? err.message : String(err);
+}
