@@ -11,7 +11,7 @@ import { startScanJob, cancelJob, getJobStatus } from "../services/jobs.js";
 
 let dir: string;
 let ctx: AppContext;
-const logger = { debug: vi.fn(), error: vi.fn() } as unknown as Logger;
+const logger = { debug: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), "scan-mcp-cancel-"));
   ctx = { logger, backend: new MockBackend(), config: ConfigSchema.parse({
@@ -125,6 +125,16 @@ describe("job cancellation boundaries", () => {
     expect(await cancelJob(job.job_id, ctx)).toEqual({ ok: false, error: "job is already completed" });
     expect(await fs.readFile(path.join(job.run_dir, "manifest.json"), "utf8")).toBe(before);
     expect((await events(job.run_dir)).filter(type => type.startsWith("job_") && type !== "job_started")).toEqual(["job_completed"]);
+  });
+
+  it("completes the job and logs a warning when the last-used device cannot be saved", async () => {
+    // A regular file where the state directory belongs makes the save fail.
+    await fs.writeFile(path.join(dir, ".state"), "not a directory");
+    const job = await startScanJob({ device_id: "test" }, ctx);
+    expect(job.state).toBe("completed");
+    expect(await getJobStatus(job.job_id, ctx)).toMatchObject({ state: "completed", pages: 2, documents: 1 });
+    expect(await events(job.run_dir)).toContain("job_completed");
+    expect(logger.warn).toHaveBeenCalledWith(expect.objectContaining({ deviceId: "test" }), "could not persist last-used device");
   });
 
   it("still returns the committed state when the final manifest write fails", async () => {
