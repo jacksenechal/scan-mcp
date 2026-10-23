@@ -217,7 +217,7 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
       logger.error({ err, jobId: manifest.job_id, state: manifest.state }, "could not persist final job state");
     }
     if (manifest.state === "completed" && config.PERSIST_LAST_USED_DEVICE && manifest.device_id) {
-      await saveLastUsedDevice(manifest.device_id, config);
+      await saveLastUsedDevice(manifest.device_id, ctx);
     }
     logger.debug({ jobId: manifest.job_id, state: manifest.state }, "scan job finished");
     return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
@@ -491,11 +491,13 @@ async function lastUsedPath(config: AppConfig) {
   return path.join(await stateDir(config), "scan-mcp.json");
 }
 
-async function saveLastUsedDevice(deviceId: string, config: AppConfig) {
-  const p = await lastUsedPath(config);
+// Remembering the device is a convenience: failing to save it must not fail a finished scan.
+async function saveLastUsedDevice(deviceId: string, { config, logger }: AppContext) {
   try {
-    await fs.writeFile(p, JSON.stringify({ device_id: deviceId }, null, 2));
-  } catch {}
+    await fs.writeFile(await lastUsedPath(config), JSON.stringify({ device_id: deviceId }, null, 2));
+  } catch (err) {
+    logger.warn({ err, deviceId }, "could not persist last-used device");
+  }
 }
 
 async function loadLastUsedDevice(config: AppConfig): Promise<string | null> {
