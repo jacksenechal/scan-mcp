@@ -99,7 +99,6 @@ Environment:
   SCAN_MOCK                Mock SANE; generate fake TIFFs (default: false)
   INBOX_DIR                Base directory for job runs (default: scanned_documents/inbox)
   SCANIMAGE_BIN            Path to scanimage (default: scanimage)
-  SCANADF_BIN              Path to scanadf (default: scanadf)
   TIFFCP_BIN               Path to tiffcp (default: tiffcp)
   IM_CONVERT_BIN           Path to convert (default: convert)
   SCAN_EXCLUDE_BACKENDS    CSV backends to exclude (e.g., v4l)

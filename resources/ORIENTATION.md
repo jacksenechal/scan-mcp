@@ -114,5 +114,5 @@ After `start_scan_job`, you receive `{ job_id, run_dir, state }`.
 
 ## References
 - Defaults and selection logic are further documented in the [`scan-mcp` server's official repository](https://github.com/jacksenechal/scan-mcp/blob/main/docs/SELECTION.md).
-- Server configuration can be fine-tuned with environment variables (including `INBOX_DIR`, `SCANIMAGE_BIN`, `SCANADF_BIN`, `TIFFCP_BIN`, `IM_CONVERT_BIN`, `SCAN_EXCLUDE_BACKENDS`, `SCAN_PREFER_BACKENDS`, `PERSIST_LAST_USED_DEVICE`). See the [The server's README](https://github.com/jacksenechal/scan-mcp/blob/main/README.md).
+- Server configuration can be fine-tuned with environment variables (including `INBOX_DIR`, `SCANIMAGE_BIN`, `TIFFCP_BIN`, `IM_CONVERT_BIN`, `SCAN_EXCLUDE_BACKENDS`, `SCAN_PREFER_BACKENDS`, `PERSIST_LAST_USED_DEVICE`). See the [The server's README](https://github.com/jacksenechal/scan-mcp/blob/main/README.md).
 

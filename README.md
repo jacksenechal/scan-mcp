@@ -16,7 +16,7 @@ Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and mul
 ## Features
 
 - Small, typed MCP server exposing tools for device discovery and scan jobs
-- JSON Schema–validated inputs with deterministic, typed outputs
+- zod-validated inputs; the JSON Schemas in `schemas/` document the contract and are contract-tested
 - Smart device selection (prefers ADF/duplex, avoids camera backends), robust defaults
 - Local-first transports: stdio by default to keep everything on-device, optional HTTP for your own network deployments
 
@@ -76,18 +76,19 @@ scan-mcp --http
 
 ## System Requirements
 
-- Linux with SANE utilities: `scanimage` (and optionally `scanadf`)
-- TIFF tools: `tiffcp` (preferred) or ImageMagick `convert`
+- Linux with SANE utilities: `scanimage`
+- TIFF tools: `tiffcp` (multipage assembly) and ImageMagick `convert` (carrier-sheet detection and cropping); preflight requires both
 
 ## Environment Variables
 
 - `SCAN_MOCK` (default: `false`): mock SANE calls and generate fake TIFFs for testing.
 - `INBOX_DIR` (default: `scanned_documents/inbox`): base directory for job runs and artifacts.
-- `SCANIMAGE_BIN` / `SCANADF_BIN` (defaults: `scanimage` / `scanadf`): override binary paths.
-- `TIFFCP_BIN` / `IM_CONVERT_BIN` (defaults: `tiffcp` / `convert`): multipage assembly tools.
+- `SCANIMAGE_BIN` (default: `scanimage`): override the binary path.
+- `TIFFCP_BIN` / `IM_CONVERT_BIN` (defaults: `tiffcp` / `convert`): multipage assembly and image analysis tools.
 - `SCAN_EXCLUDE_BACKENDS` (CSV): backends to exclude (e.g., `v4l`).
 - `SCAN_PREFER_BACKENDS` (CSV): preferred backends (e.g., `epjitsu,epson2`).
 - `PERSIST_LAST_USED_DEVICE` (default: `true`): persist and lightly prefer last used device.
+- `LOG_LEVEL` (default: `info`): pino log level.
 - `MCP_HTTP_PORT` (default: `3001`): TCP port for the HTTP transport.
 
 ## API
@@ -147,7 +148,7 @@ scan-mcp --http
   - Inputs:
     - `job_id` (string)
 
-See JSON Schemas in `schemas/` for input shapes. Tests assert against these contracts.
+See JSON Schemas in `schemas/` for input shapes. Runtime validation is zod (`src/server/register.ts`); the schemas document the contract and tests assert against them.
 
 ## How Selection and Defaults Work
 
@@ -159,7 +160,7 @@ Defaults aim for 300dpi, reasonable color mode, and ADF/duplex when available. F
 
 - `src/mcp.ts` — MCP server entry and tool registration
 - `src/services/*` — hardware interface and job orchestration
-- `schemas/` — JSON Schemas used for validation and tests
+- `schemas/` — JSON Schemas documenting the tool contracts (used by tests)
 - `docs/` — architecture, conventions, and deep dives
 
 ## Development

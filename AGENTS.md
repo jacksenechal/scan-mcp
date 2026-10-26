@@ -7,7 +7,7 @@
 - `npm test` runs the Vitest suite.
  
 ## Code & Project Conventions
-- See [CONVENTIONS.md](./CONVENTIONS.md) for coding style, project structure, security, and testing guidelines.
+- See [docs/CONVENTIONS.md](./docs/CONVENTIONS.md) for coding style, project structure, security, and testing guidelines.
 
 ## Commit & Pull Request Guidelines
 - Use conventional commit prefixes when practical (`feat:`, `fix:`, `docs:`, etc.).

@@ -26,8 +26,8 @@ This document outlines the architecture and goals of the scan-mcp server.
 - `scan://jobs/<job_id>/manifest` — manifest JSON describing documents and pages
 
 ## Implementation notes
-- Prefer `scanadf` for ADF capture; fallback to `scanimage --batch`.
-- Assemble multipage TIFFs with `tiffcp` when available, otherwise ImageMagick `convert`.
-- Document breaks: blank-page threshold, page count, or timer.
+- Capture runs a single `scanimage --batch` command (`planScanCommands` in `src/services/jobs.ts`).
+- Multipage TIFFs are assembled with `tiffcp`. ImageMagick `convert` is used for carrier-sheet detection and cropping, not for assembly.
+- Document breaks: only `page_count` is implemented. Other break types are on the roadmap (`docs/ROADMAP.md`).
 - Manifest structure defined in `schemas/manifest.schema.json`.
-- Idempotency: document hash = hash of concatenated page hashes to avoid duplicates.
+- Provenance: every page and assembled document carries its own sha256 in the manifest. The document hash is the hash of the assembled file; there is no de-duplication across jobs.

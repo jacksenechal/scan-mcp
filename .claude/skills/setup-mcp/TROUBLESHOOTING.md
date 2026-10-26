@@ -99,15 +99,13 @@ find ~ -name "config.json" -path "*/claude/*" 2>/dev/null
 
 ### "No TIFF tools found"
 
-**Issue**: Neither tiffcp nor ImageMagick convert found.
+**Issue**: tiffcp or ImageMagick convert is missing (preflight requires both).
 
-**Solution**: Install either libtiff-tools (preferred) or ImageMagick:
+**Solution**: Install whichever is missing:
 
 **Debian/Ubuntu**:
 ```bash
-sudo apt-get install libtiff-tools
-# Or
-sudo apt-get install imagemagick
+sudo apt-get install libtiff-tools imagemagick
 ```
 
 See [PLATFORMS.md](PLATFORMS.md) for other platforms.
