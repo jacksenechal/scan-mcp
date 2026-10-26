@@ -147,7 +147,6 @@ Override scanner binary locations for custom SANE installations:
       "env": {
         "INBOX_DIR": "~/Documents/scanned_documents/inbox",
         "SCANIMAGE_BIN": "/usr/local/bin/scanimage",
-        "SCANADF_BIN": "/usr/local/bin/scanadf",
         "TIFFCP_BIN": "/opt/local/bin/tiffcp",
         "IM_CONVERT_BIN": "/usr/local/bin/convert"
       }
@@ -158,7 +157,6 @@ Override scanner binary locations for custom SANE installations:
 
 **Available overrides**:
 - `SCANIMAGE_BIN` (default: `scanimage`)
-- `SCANADF_BIN` (default: `scanadf`)
 - `TIFFCP_BIN` (default: `tiffcp`)
 - `IM_CONVERT_BIN` (default: `convert`)
 

@@ -5,7 +5,7 @@ This package uses a minimal Node.js + TypeScript stack. Key conventions:
 ## Language and tooling
 - Node.js 22 LTS with ESM modules.
 - TypeScript in strict mode.
-- ESLint and Prettier for linting and formatting.
+- ESLint for linting (no Prettier; match the surrounding style).
 - Vitest for tests; run with `npm test`.
 - `tsc --noEmit` for type checks; build with `tsc`.
 - Logging via Pino; validation with AJV or Zod.
@@ -13,7 +13,7 @@ This package uses a minimal Node.js + TypeScript stack. Key conventions:
 
 ## Project structure
 - `src/mcp.ts` bootstraps the MCP server.
-- `src/tools/` hold tool implementations.
+- `src/server/` registers the MCP tools and resources; `src/http-server.ts` is the HTTP transport.
 - `src/services/` handle system integration (e.g., SANE, TIFF assembly).
 - `schemas/` contains JSON Schemas for tool contracts.
 - `src/tests/` houses unit and integration tests.
@@ -30,7 +30,7 @@ This package uses a minimal Node.js + TypeScript stack. Key conventions:
 ## Security and safety
 - Never use `shell: true`; pass argv arrays to child processes.
 - Normalize and sanitize all filesystem paths.
-- Handle filename collisions by appending numeric suffixes (`_001`, `_002`, ...).
+- Every job writes into its own `job-<uuid>` directory, so output filenames never collide.
 
 ## Configuration
 - Read configuration from environment variables (supporting `.env`).

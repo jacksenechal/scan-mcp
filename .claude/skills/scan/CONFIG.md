@@ -97,11 +97,6 @@ Override paths to scanner and image processing binaries.
 - **Default**: `scanimage`
 - **Example**: `/usr/local/bin/scanimage`
 
-### SCANADF_BIN
-
-- **Default**: `scanadf`
-- **Example**: `/usr/local/bin/scanadf`
-
 ### TIFFCP_BIN
 
 - **Default**: `tiffcp`

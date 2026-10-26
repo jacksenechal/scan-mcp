@@ -62,7 +62,7 @@ Key details:
 
 ## Troubleshooting
 
-- **Missing binaries**: Install or adjust the `SCANIMAGE_BIN`, `SCANADF_BIN`, `TIFFCP_BIN`, or `IM_CONVERT_BIN` environment variables to point at the correct paths.
+- **Missing binaries**: Install or adjust the `SCANIMAGE_BIN`, `TIFFCP_BIN`, or `IM_CONVERT_BIN` environment variables to point at the correct paths.
 - **Permission errors**: Ensure the configured `INBOX_DIR` exists and the MCP client user can read/write inside it.
 - **No scanners found**: Confirm `scanimage -L` returns at least one device. If not, install or troubleshoot SANE backends, or enable `SCAN_MOCK=true` for testing.
 - **Large documents**: Provide `TIFFCP_BIN` (libtiff) when possible—ImageMagick `convert` is a slower fallback.
