@@ -171,7 +171,7 @@ async function runScan(runDir: string, manifest: Manifest, eventsPath: string, c
   return ran; // Return ran
 }
 
-async function processPages(runDir: string, manifest: Manifest, ctx: AppContext, eventsPath: string) {
+async function processPages(runDir: string, manifest: Manifest, ctx: AppContext, eventsPath: string): Promise<boolean> {
   const { config } = ctx;
   const entries = await fs.readdir(runDir);
   const pageFiles = entries
@@ -193,10 +193,26 @@ async function processPages(runDir: string, manifest: Manifest, ctx: AppContext,
       .map((i) => manifest.pages[i - 1])
       .filter(Boolean)
       .map((pg) => pg!.cropped_path ?? pg!.path);
-    await assembleTiff(segFiles, outDoc, config);
+    try {
+      await assembleTiff(segFiles, outDoc, config);
+    } catch (err) {
+      const data: Record<string, unknown> = { document: docIdx, pages: seg, inputs: segFiles, out: outDoc };
+      if (isExecaError(err)) {
+        data.exitCode = err.exitCode;
+        data.signal = err.signal;
+        data.shortMessage = err.shortMessage;
+        data.stderrTail = String(err.stderr ?? "").split("\n").slice(-20).join("\n");
+      } else {
+        data.error = String(err);
+      }
+      await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "document_assembly_failed", data });
+      ctx.logger.error({ jobId: manifest.job_id, ...data }, "document assembly failed");
+      return false;
+    }
     manifest.documents.push({ index: docIdx, pages: seg, path: outDoc, sha256: await hashFile(outDoc) });
     docIdx++;
   }
+  return true;
 }
 
 async function detectAndCropCarrierSheets(manifest: Manifest, ctx: AppContext, eventsPath: string) {
@@ -279,7 +295,13 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
     return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
   }
 
-  await processPages(runDir, manifest, ctx, eventsPath);
+  const assembled = await processPages(runDir, manifest, ctx, eventsPath);
+  if (!assembled) {
+    manifest.state = "error";
+    await updateManifest(runDir, manifest);
+    await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_error", data: { reason: "document assembly failed" } });
+    return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
+  }
 
   manifest.state = "completed";
   await updateManifest(runDir, manifest);
@@ -484,12 +506,8 @@ async function assembleTiff(inputFiles: string[], outPath: string, config: AppCo
     await fs.copyFile(inputFiles[0], outPath);
     return;
   }
-  try {
-    await execa(config.TIFFCP_BIN, [...inputFiles, outPath], { shell: false });
-  } catch {
-    // Fallback: copy the first page
-    await fs.copyFile(inputFiles[0], outPath);
-  }
+  // Failures propagate: silently substituting page 1 would drop pages from the document.
+  await execa(config.TIFFCP_BIN, [...inputFiles, outPath], { shell: false });
 }
 
 export async function resolveEffectiveInput(input: StartScanInput, ctx: AppContext): Promise<StartScanInput> {
