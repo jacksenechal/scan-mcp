@@ -57,10 +57,10 @@ scan-mcp --http
 ```
 
 - Default port is `3001`; set `MCP_HTTP_PORT` to override (for example `MCP_HTTP_PORT=3333 scan-mcp --http`).
-- Binds all interfaces (`::`) by default; set `MCP_HTTP_HOST` to restrict (for example `MCP_HTTP_HOST=127.0.0.1` when a reverse proxy fronts the server).
+- Binds `127.0.0.1` by default. Set `MCP_HTTP_HOST` to expose it on other interfaces (for example `MCP_HTTP_HOST=::` for all, or a LAN address); the server has no authentication, so only do that on a trusted network.
 - HTTP responses use server-sent events (SSE) for streaming tool output; clients such as Claude Desktop and Windsurf support
   this transport.
-- There is currently no authentication; this is intended for internal LAN networking
+- There is currently no authentication; widen the bind address only on a trusted internal network.
 
 ## Install
 
@@ -90,6 +90,7 @@ scan-mcp --http
 - `PERSIST_LAST_USED_DEVICE` (default: `true`): persist and lightly prefer last used device.
 - `LOG_LEVEL` (default: `info`): pino log level.
 - `MCP_HTTP_PORT` (default: `3001`): TCP port for the HTTP transport.
+- `MCP_HTTP_HOST` (default: `127.0.0.1`): bind address for the HTTP transport.
 
 ## API
 
@@ -117,7 +118,7 @@ scan-mcp --http
     - `duplex` (boolean)
     - `page_size` (`Letter` | `A4` | `Legal` | `Custom`)
     - `custom_size_mm` { `width`, `height` }
-    - `doc_break_policy` { `type`, `blank_threshold`, `page_count`, `timer_ms`, `barcode_values` }
+    - `doc_break_policy` { `type`, `blank_threshold`, `page_count`, `timer_ms`, `barcode_values` } (only `none` and `page_count` are implemented; `blank_page`, `timer`, and `barcode` are rejected with an error)
     - `output_format` (string, default `tiff`)
     - `tmp_dir` (string)
     - `crop_carrier_sheets` (boolean, default `false`): detect carrier-sheet leading-edge band and write cropped page derivatives; raw pages are kept

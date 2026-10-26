@@ -53,6 +53,19 @@ describe("startScanJob (mock)", () => {
     expect(cancel.ok).toBe(true);
   });
 
+  it.each(["blank_page", "timer", "barcode"] as const)("rejects unimplemented doc_break_policy.type %s before scanning", async (type) => {
+    const before = await fs.readdir(tmpRoot);
+    await expect(startScanJob({ tmp_dir: tmpRoot, doc_break_policy: { type } }, ctx)).rejects.toThrow(/not implemented/);
+    expect(await fs.readdir(tmpRoot)).toEqual(before);
+  });
+
+  it("accepts the implemented doc_break_policy types", async () => {
+    for (const policy of [{ type: "none" as const }, { type: "page_count" as const, page_count: 1 }]) {
+      const res = await startScanJob({ tmp_dir: tmpRoot, doc_break_policy: policy }, ctx);
+      expect(res.state).toBe("completed");
+    }
+  });
+
   it("skips carrier sheet detection entirely (manifest pages have no carrier fields)", async () => {
     const res = await startScanJob({ tmp_dir: tmpRoot, crop_carrier_sheets: true }, ctx);
     const manifestPath = path.join(res.run_dir, "manifest.json");
