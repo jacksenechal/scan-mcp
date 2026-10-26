@@ -16,7 +16,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ["tests/**/*.ts"],
+    files: ["src/tests/**/*.ts"],
     languageOptions: {
       parserOptions: {
         ecmaVersion: "latest",
