@@ -16,7 +16,7 @@ Minimal MCP server for scanner capture (ADF/duplex/page-size), batching, and mul
 ## Features
 
 - Small, typed MCP server exposing tools for device discovery and scan jobs
-- zod-validated inputs; the JSON Schemas in `schemas/` document the contract and are contract-tested
+- zod-validated inputs; zod is the single source of truth, published as JSON Schema through `tools/list` and contract-tested (`src/tests/contract.spec.ts`)
 - Smart device selection (prefers ADF/duplex, avoids camera backends), robust defaults
 - Local-first transports: stdio by default to keep everything on-device, optional HTTP for your own network deployments
 
@@ -166,7 +166,7 @@ scan-mcp --http
 
 The `scan://jobs/{job_id}/manifest` and `scan://jobs/{job_id}/events` resources only cover jobs directly in `INBOX_DIR`. For jobs started with `tmp_dir`, use the tools above with `tmp_dir`.
 
-See JSON Schemas in `schemas/` for input shapes. Runtime validation is zod (`src/server/register.ts`); the schemas document the contract and tests assert against them.
+Input shapes are defined by zod (`src/server/register.ts`) and published as JSON Schema through MCP `tools/list`. The on-disk `manifest.json` format is `ManifestSchema` in `src/services/manifest.ts`.
 
 ## How Selection and Defaults Work
 
@@ -178,7 +178,6 @@ Defaults aim for 300dpi, reasonable color mode, and ADF/duplex when available. F
 
 - `src/mcp.ts` — MCP server entry and tool registration
 - `src/services/*` — hardware interface and job orchestration
-- `schemas/` — JSON Schemas documenting the tool contracts (used by tests)
 - `docs/` — architecture, conventions, and deep dives
 
 ## Development

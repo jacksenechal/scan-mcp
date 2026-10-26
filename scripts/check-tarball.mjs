@@ -44,7 +44,6 @@ const files = payload[0]?.files?.map(f => f.path) ?? [];
 const required = [
   'bin/scan-mcp',
   'dist/mcp.js',
-  'schemas/manifest.schema.json',
   'resources/ORIENTATION.md'
 ];
 

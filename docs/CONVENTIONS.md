@@ -15,12 +15,11 @@ This package uses a minimal Node.js + TypeScript stack. Key conventions:
 - `src/mcp.ts` bootstraps the MCP server.
 - `src/server/` registers the MCP tools and resources; `src/http-server.ts` is the HTTP transport.
 - `src/services/` handle system integration (e.g., SANE, TIFF assembly).
-- `schemas/` contains JSON Schemas for tool contracts.
 - `src/tests/` houses unit and integration tests.
 - Test files are named `*.spec.ts` (not `*.test.ts`).
 
 ## Determinism and typed contracts
-- Define JSON Schemas for all tool inputs and outputs.
+- Define zod schemas for all tool inputs (and the on-disk manifest); they are the single source of truth and the SDK publishes them as JSON Schema.
 - Validate at boundaries and keep transformation logic pure.
 - Avoid side effects outside of `src/services/`.
 
@@ -39,7 +38,7 @@ This package uses a minimal Node.js + TypeScript stack. Key conventions:
 
 ## Testing
 - Unit tests mock child processes and filesystem interactions.
-- Contract tests validate sample payloads against the JSON Schemas.
+- Contract tests assert the published `tools/list` input schemas and parse a mock job's `manifest.json` with `ManifestSchema`.
 - Always clean up artifacts created during tests.
 
 ## Development workflow
