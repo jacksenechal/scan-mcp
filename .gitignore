@@ -11,9 +11,9 @@ tsconfig.tsbuildinfo
 .vscode/
 
 # Ignore compiled test artifacts
-tests/*.js
-tests/*.d.ts
-tests/.tmp-*
+src/tests/*.js
+src/tests/*.d.ts
+src/tests/.tmp-*
 
 # Scanned Docs
 scanned_documents/
@@ -24,3 +24,5 @@ scanned_documents/
 # Local Files
 .env
 
+# Per-machine Claude Code settings
+.claude/settings.local.json
