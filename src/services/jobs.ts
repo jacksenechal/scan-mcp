@@ -1,40 +1,18 @@
-import { promises as fs, createWriteStream, type WriteStream } from "fs";
+import { promises as fs } from "fs";
 import path from "path";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
-import { execa, type Subprocess, type ExecaError } from "execa";
 import type { AppContext } from "../context.js";
 import type { AppConfig } from "../config.js";
-import { DEFAULT_RESOLUTION_DPI, HIGH_RES_COLOR_DEFAULT_DPI, LETTER_WIDTH_MM, LETTER_HEIGHT_MM, A4_WIDTH_MM, A4_HEIGHT_MM, LEGAL_WIDTH_MM, LEGAL_HEIGHT_MM } from "../constants.js";
+import { DEFAULT_RESOLUTION_DPI, HIGH_RES_COLOR_DEFAULT_DPI } from "../constants.js";
 import { selectDevice } from "./select.js";
-import { getDeviceOptions } from "./sane.js";
+import type { StartScanInput } from "./backends/backend.js";
+export type { StartScanInput } from "./backends/backend.js";
 import { detectCarrierSheet, cropCarrierSheet } from "./carrier.js";
 
-import { tailTextFile, resolveJobPath } from "./utils.js";
+import { tailTextFile, resolveJobPath, isExecaError, isNodeError } from "./utils.js";
 
-const activeJobs = new Map<string, Subprocess>();
-
-export type StartScanInput = {
-  device_id?: string;
-  resolution_dpi?: number;
-  // SANE backends vary (e.g., Halftone, Binary, Gray16); accept any string
-  color_mode?: string;
-  // The MCP tool schema restricts requests to "Flatbed" | "ADF" | "ADF Duplex", but the
-  // effective/resolved value may be a device-specific string (e.g. "ADF Front") once
-  // mapped against the device's reported sources, so this is widened to `string`.
-  source?: string;
-  duplex?: boolean;
-  page_size?: "Letter" | "A4" | "Legal" | "Custom";
-  custom_size_mm?: { width: number; height: number };
-  doc_break_policy?: {
-    type?: "page_count" | "none";
-    page_count?: number;
-  };
-  output_format?: string;
-  tmp_dir?: string;
-  // Detect carrier sheet leading-edge band and crop derivatives.
-  crop_carrier_sheets?: boolean;
-};
+const activeJobs = new Map<string, AbortController>();
 
 export type StartScanResult = {
   job_id: string;
@@ -84,92 +62,8 @@ async function initializeJob(input: StartScanInput, ctx: AppContext): Promise<{ 
   return { runDir, manifest, eventsPath };
 }
 
-function isExecaError(e: unknown): e is ExecaError {
-  return typeof e === "object" && e !== null && "shortMessage" in e && "exitCode" in e;
-}
-
-function isNodeError(e: unknown): e is NodeJS.ErrnoException {
-  if (!(e instanceof Error)) return false;
-  return typeof e === "object" && e !== null && "code" in e;
-}
-
-async function runScan(runDir: string, manifest: Manifest, eventsPath: string, ctx: AppContext): Promise<boolean> {
-  const { config, logger } = ctx;
-  if (config.SCAN_MOCK) {
-    // Create a couple of fake TIFFs to simulate capture
-    const pageCount = 2;
-    for (let i = 1; i <= pageCount; i++) {
-      const p = path.join(runDir, `page_${String(i).padStart(4, "0")}.tiff`);
-      await fs.writeFile(p, `MOCK_TIFF_PAGE_${i}`);
-    }
-    return true;
-  }
-
-  // Real execution path
-  const candidates = planScanCommands(manifest.params, runDir, ctx);
-
-  let ran = false; // Initialize ran to false
-  for (const c of candidates) {
-    let outStream: WriteStream | undefined;
-    let errStream: WriteStream | undefined;
-    const outPath = path.join(runDir, "scanner.out.log");
-    const errPath = path.join(runDir, "scanner.err.log");
-    try {
-      await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_exec", data: { bin: c.bin, args: c.args, runDir } });
-      logger.debug({ cmd: c, runDir }, "scanner exec");
-      // Do not inherit stdio; pipe and persist logs to files to avoid polluting MCP stdout
-      const proc = execa(c.bin, c.args, { cwd: runDir, shell: false });
-      outStream = createWriteStream(outPath, { flags: "a" });
-      errStream = createWriteStream(errPath, { flags: "a" });
-      proc.stdout?.pipe(outStream);
-      proc.stderr?.pipe(errStream);
-      activeJobs.set(manifest.job_id, proc);
-      await proc;
-      ran = true;
-      break;
-    } catch (err) {
-      const stderrTail = await tailTextFile(errPath, 120);
-      const stdoutTail = await tailTextFile(outPath, 60);
-
-      const errorInfo: Record<string, unknown> = {
-        runDir,
-        cmd: c,
-        stderrTail,
-        stdoutTail,
-      };
-
-      if (isExecaError(err)) {
-        errorInfo.kind = "execa";
-        errorInfo.exitCode = err.exitCode;
-        errorInfo.signal = err.signal;
-        errorInfo.shortMessage = err.shortMessage;
-        errorInfo.originalMessage = err.originalMessage;
-      } else if (isNodeError(err)) {
-        errorInfo.kind = "node";
-        errorInfo.code = err.code;
-        errorInfo.errno = err.errno;
-        errorInfo.message = err.message;
-        errorInfo.name = err.name;
-        errorInfo.stack = err.stack;
-      } else {
-        errorInfo.kind = "unknown";
-        errorInfo.error = String(err);
-      }
-
-      await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "scanner_failed", data: errorInfo });
-      logger.error(errorInfo, "scanner command failed");
-      continue;
-    } finally {
-      activeJobs.delete(manifest.job_id);
-      try { outStream?.end(); } catch {}
-      try { errStream?.end(); } catch {}
-    }
-  }
-  return ran; // Return ran
-}
 
 async function processPages(runDir: string, manifest: Manifest, ctx: AppContext, eventsPath: string): Promise<boolean> {
-  const { config } = ctx;
   const entries = await fs.readdir(runDir);
   const pageFiles = entries
     .filter((f) => f.startsWith("page_") && f.endsWith(".tiff") && !f.endsWith(".cropped.tiff"))
@@ -191,7 +85,7 @@ async function processPages(runDir: string, manifest: Manifest, ctx: AppContext,
       .filter(Boolean)
       .map((pg) => pg!.cropped_path ?? pg!.path);
     try {
-      await assembleTiff(segFiles, outDoc, config);
+      if (segFiles.length > 0) await ctx.backend.assembleTiff(segFiles, outDoc, ctx);
     } catch (err) {
       const data: Record<string, unknown> = { document: docIdx, pages: seg, inputs: segFiles, out: outDoc };
       if (isExecaError(err)) {
@@ -272,7 +166,20 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
   logger.debug({ input }, "start scan job");
   const { runDir, manifest, eventsPath } = await initializeJob(input, ctx);
 
-  const scanSuccessful = await runScan(runDir, manifest, eventsPath, ctx);
+  const controller = new AbortController();
+  activeJobs.set(manifest.job_id, controller);
+  let scanSuccessful: boolean;
+  try {
+    ({ ran: scanSuccessful } = await ctx.backend.runScan({
+      input: manifest.params,
+      runDir,
+      ctx,
+      signal: controller.signal,
+      onEvent: (evt) => appendEvent(eventsPath, { ts: new Date().toISOString(), ...evt }),
+    }));
+  } finally {
+    activeJobs.delete(manifest.job_id);
+  }
 
   if (!scanSuccessful) {
     manifest.state = "error";
@@ -331,7 +238,7 @@ export async function cancelJob(jobId: string, ctx: AppContext, baseDir?: string
 
   // Terminate the running process, if it exists
   if (activeJobs.has(jobId)) {
-    activeJobs.get(jobId)?.kill("SIGTERM", new Error("MCP_CANCEL_REQUEST"));
+    activeJobs.get(jobId)?.abort();
     activeJobs.delete(jobId);
   }
 
@@ -419,29 +326,6 @@ async function appendEvent(eventsPath: string, evt: Record<string, unknown>) {
   await fs.appendFile(eventsPath, JSON.stringify(evt) + "\n");
 }
 
-export function planScanCommands(input: StartScanInput, runDir: string, ctx: AppContext): { bin: string; args: string[] }[] {
-  const batchPattern = path.join(runDir, "page_%04d.tiff");
-  const baseArgs = buildCommonArgs(input, batchPattern);
-  return [{ bin: ctx.config.SCANIMAGE_BIN, args: baseArgs }];
-}
-
-function buildCommonArgs(input: StartScanInput, batchPattern: string): string[] {
-  const args: string[] = [];
-  if (input.device_id) args.push("-d", input.device_id);
-  if (input.resolution_dpi) args.push("--resolution", String(input.resolution_dpi));
-  if (input.color_mode) args.push("--mode", input.color_mode);
-  if (input.source) args.push("--source", input.source);
-  // Page size mapping via -x/-y in mm when provided
-  const size = pageSizeMm(input);
-  if (size) {
-    args.push("-x", `${size.width}mm`, "-y", `${size.height}mm`);
-  }
-  // Always batch pages; both scanimage and scanadf forward these
-  args.push(`--batch=${batchPattern}`);
-  args.push("--format=tiff");
-  return args;
-}
-
 /**
  * Map a requested generic source ("Flatbed" | "ADF" | "ADF Duplex") to the closest
  * matching source string actually reported by the device (e.g. a Fujitsu ScanSnap
@@ -495,19 +379,8 @@ export function segmentPages(pages: number[], policy?: StartScanInput["doc_break
   return [pages];
 }
 
-async function assembleTiff(inputFiles: string[], outPath: string, config: AppConfig) {
-  if (inputFiles.length === 0) return;
-  if (config.SCAN_MOCK) {
-    // In mock mode, directly copy the first page to simulate assembly
-    await fs.copyFile(inputFiles[0], outPath);
-    return;
-  }
-  // Failures propagate: silently substituting page 1 would drop pages from the document.
-  await execa(config.TIFFCP_BIN, [...inputFiles, outPath], { shell: false });
-}
-
 export async function resolveEffectiveInput(input: StartScanInput, ctx: AppContext): Promise<StartScanInput> {
-  const { config } = ctx;
+  const { config, backend } = ctx;
   const out: StartScanInput = { ...input };
 
   if (!out.device_id) {
@@ -521,63 +394,55 @@ export async function resolveEffectiveInput(input: StartScanInput, ctx: AppConte
   }
 
   if (out.device_id) {
-    let opts: Awaited<ReturnType<typeof getDeviceOptions>> | undefined;
-    try {
-      opts = await getDeviceOptions(out.device_id, ctx);
-    } catch {
-      // If the provided device_id cannot be probed, drop it and fall back to selection
-      out.device_id = undefined;
-    }
-    if (opts) {
-      if (opts.sources && opts.sources.length) {
-        // If duplex requested, prefer ADF Duplex regardless of any source already set.
-        const requested = out.duplex ? "ADF Duplex" : out.source;
-        if (requested) {
-          // Let a mapping failure (device doesn't support the requested source) propagate
-          // as a clear error rather than silently falling back to device deselection.
-          out.source = resolveSourceForDevice(requested, opts.sources);
-        } else {
-          const selected = opts.sources.includes("ADF Duplex")
-            ? "ADF Duplex"
-            : opts.sources.includes("ADF")
-              ? "ADF"
-              : opts.sources[0];
-          out.source = selected;
-        }
+    const opts = await backend.getDeviceOptions(out.device_id, ctx);
+    if (opts.sources && opts.sources.length) {
+      // If duplex requested, prefer ADF Duplex regardless of any source already set.
+      const requested = out.duplex ? "ADF Duplex" : out.source;
+      if (requested) {
+        // Let a mapping failure (device doesn't support the requested source) propagate
+        // as a clear error rather than silently falling back to device deselection.
+        out.source = resolveSourceForDevice(requested, opts.sources);
+      } else {
+        const selected = opts.sources.includes("ADF Duplex")
+          ? "ADF Duplex"
+          : opts.sources.includes("ADF")
+            ? "ADF"
+            : opts.sources[0];
+        out.source = selected;
       }
-      if (!out.resolution_dpi) {
-        // First, probe 300dpi explicitly; many devices support it even if not listed
-        if (out.device_id && (await probeResolution(out.device_id, DEFAULT_RESOLUTION_DPI, config))) {
+    }
+    if (!out.resolution_dpi) {
+      // First, probe 300dpi explicitly; many devices support it even if not listed
+      if (await backend.probeResolution?.(out.device_id, DEFAULT_RESOLUTION_DPI, ctx)) {
+        out.resolution_dpi = DEFAULT_RESOLUTION_DPI;
+      } else if (opts.resolutions && opts.resolutions.length) {
+        // Prefer DEFAULT_RESOLUTION_DPI when available; otherwise choose the best available <= default;
+        // if none are <= default, choose the closest overall (to avoid huge files by default).
+        if (opts.resolutions.includes(DEFAULT_RESOLUTION_DPI)) {
           out.resolution_dpi = DEFAULT_RESOLUTION_DPI;
-        } else if (opts.resolutions && opts.resolutions.length) {
-          // Prefer DEFAULT_RESOLUTION_DPI when available; otherwise choose the best available <= default;
-          // if none are <= default, choose the closest overall (to avoid huge files by default).
-          if (opts.resolutions.includes(DEFAULT_RESOLUTION_DPI)) {
-            out.resolution_dpi = DEFAULT_RESOLUTION_DPI;
+        } else {
+          const sorted = [...opts.resolutions].sort((a, b) => a - b);
+          const le = sorted.filter((n) => n <= DEFAULT_RESOLUTION_DPI);
+          if (le.length > 0) {
+            out.resolution_dpi = le[le.length - 1];
           } else {
-            const sorted = [...opts.resolutions].sort((a, b) => a - b);
-            const le = sorted.filter((n) => n <= DEFAULT_RESOLUTION_DPI);
-            if (le.length > 0) {
-              out.resolution_dpi = le[le.length - 1];
-            } else {
-              // Pick the closest above default
-              out.resolution_dpi = sorted[0];
-            }
+            // Pick the closest above default
+            out.resolution_dpi = sorted[0];
           }
         }
       }
-      if (opts.color_modes && opts.color_modes.length) {
-        const available = opts.color_modes;
-        // If user provided a color_mode, normalize to an available mode (case-insensitive)
-        if (out.color_mode) {
-          const match = available.find((m) => m.toLowerCase() === String(out.color_mode).toLowerCase());
-          if (match) out.color_mode = match;
-        } else {
-          // resolution_dpi is resolved above, so this sees the effective dpi.
-          const pref = colorModePreference(out.resolution_dpi);
-          const selected = pref.find((p) => available.some((m) => m.toLowerCase() === p.toLowerCase())) ?? available[0];
-          out.color_mode = selected;
-        }
+    }
+    if (opts.color_modes && opts.color_modes.length) {
+      const available = opts.color_modes;
+      // If user provided a color_mode, normalize to an available mode (case-insensitive)
+      if (out.color_mode) {
+        const match = available.find((m) => m.toLowerCase() === String(out.color_mode).toLowerCase());
+        if (match) out.color_mode = match;
+      } else {
+        // resolution_dpi is resolved above, so this sees the effective dpi.
+        const pref = colorModePreference(out.resolution_dpi);
+        const selected = pref.find((p) => available.some((m) => m.toLowerCase() === p.toLowerCase())) ?? available[0];
+        out.color_mode = selected;
       }
     }
   }
@@ -598,32 +463,6 @@ function colorModePreference(resolutionDpi: number | undefined): string[] {
   return effectiveDpi >= HIGH_RES_COLOR_DEFAULT_DPI
     ? ["Color", "Gray", "Halftone", "Lineart"]
     : ["Lineart", "Gray", "Halftone", "Color"];
-}
-
-async function probeResolution(deviceId: string, dpi: number, config: AppConfig): Promise<boolean> {
-  if (config.SCAN_MOCK) return true;
-  try {
-    await execa(config.SCANIMAGE_BIN, ["-n", "-d", deviceId, "--resolution", String(dpi)], { shell: false });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function pageSizeMm(input: StartScanInput): { width: number; height: number } | null {
-  if (input.page_size === "Custom" && input.custom_size_mm) {
-    return { width: input.custom_size_mm.width, height: input.custom_size_mm.height };
-  }
-  switch (input.page_size) {
-    case "Letter":
-      return { width: LETTER_WIDTH_MM, height: LETTER_HEIGHT_MM };
-    case "A4":
-      return { width: A4_WIDTH_MM, height: A4_HEIGHT_MM };
-    case "Legal":
-      return { width: LEGAL_WIDTH_MM, height: LEGAL_HEIGHT_MM };
-    default:
-      return null;
-  }
 }
 
 async function stateDir(config: AppConfig) {

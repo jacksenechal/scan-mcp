@@ -1,6 +1,8 @@
+import { planScanCommands } from "../services/backends/sane.js";
+import { MockBackend } from "../services/backends/mock.js";
 import { describe, it, expect, vi } from "vitest";
 import path from "path";
-import { planScanCommands, segmentPages, resolveSourceForDevice, resolveEffectiveInput } from "../services/jobs.js";
+import { segmentPages, resolveSourceForDevice, resolveEffectiveInput } from "../services/jobs.js";
 import type { AppConfig } from "../config.js";
 import type { AppContext } from "../context.js";
 import type { Logger } from "pino";
@@ -17,7 +19,7 @@ const config: AppConfig = {
   PERSIST_LAST_USED_DEVICE: true,
 };
 const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as Logger;
-const ctx: AppContext = { config, logger };
+const ctx: AppContext = { config, logger, backend: new MockBackend() };
 
 describe("command planning", () => {
   const runDir = path.resolve("/tmp/dummy-run");

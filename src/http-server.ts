@@ -8,6 +8,7 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createLogger, maskAuthHeaders } from "./server/logger.js";
 import { loadConfig } from "./config.js";
 import { registerScanServer } from "./server/register.js";
+import { selectBackend } from "./services/backends/index.js";
 import type { AppContext } from "./context.js";
 import pkg from "../package.json" with { type: "json" };
 
@@ -16,7 +17,7 @@ const version = pkg.version as string;
 export function startHttpServer(opts: { enableStreamable?: boolean } = {}): HttpServer {
   const config = loadConfig();
   const logger = createLogger("http", config.LOG_LEVEL);
-  const ctx: AppContext = { config, logger };
+  const ctx: AppContext = { config, logger, backend: selectBackend(config) };
   const app = express();
   app.use(express.json({ limit: "4mb" }));
 
