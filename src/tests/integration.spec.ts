@@ -75,16 +75,29 @@ describe("integration tests", () => {
     expect(status.documents).toBe(manifest.documents.length);
   });
 
-  it("should cancel a job and reflect the status", async () => {
-    const { job_id } = await startScanJob({}, ctx);
-
-    const cancelResult = await cancelJob(job_id, ctx);
-    expect(cancelResult.ok).toBe(true);
-
-    await new Promise(resolve => setTimeout(resolve, 100)); // Add a small delay
-
-    const status = await getJobStatus(job_id, ctx);
-    expect(status.state).toBe("cancelled");
+  it("should cancel a running job and reflect the status", async () => {
+    let entered!: (jobId: string) => void;
+    let release!: () => void;
+    const ready = new Promise<string>(resolve => { entered = resolve; });
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const capture = vi.spyOn(ctx.backend, "runScan").mockImplementationOnce(async ({ runDir }) => {
+      entered(path.basename(runDir));
+      await blocked;
+      return { ran: true };
+    });
+    const pending = startScanJob({}, ctx);
+    try {
+      const jobId = await ready;
+      expect(await getJobStatus(jobId, ctx)).toMatchObject({ state: "running" });
+      expect(await cancelJob(jobId, ctx)).toEqual({ ok: true });
+    } finally {
+      release();
+      await pending;
+      capture.mockRestore();
+    }
+    const job = await pending;
+    expect(job.state).toBe("cancelled");
+    expect(await getJobStatus(job.job_id, ctx)).toMatchObject({ state: "cancelled" });
   });
 
   it("should list multiple jobs", async () => {

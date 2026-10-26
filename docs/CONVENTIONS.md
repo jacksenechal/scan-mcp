@@ -43,3 +43,10 @@ This package uses a minimal Node.js + TypeScript stack. Key conventions:
 
 ## Development workflow
 - Run `make verify` before opening a pull request.
+
+## Job state and cancellation
+- A job's terminal state is decided in memory before any final I/O and never changes afterwards:
+  an acknowledged cancel must not become a completion, and a completed or failed job rejects cancel.
+- Backends report each finished page with `page_scanned`; the manifest's pages come only from
+  those events and stay whatever the job's outcome. Never report an in-progress scratch file.
+- Cancellation tests should block on explicit gates (not sleeps) and exercise real child-process termination.

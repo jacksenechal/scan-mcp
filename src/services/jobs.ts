@@ -10,9 +10,11 @@ import type { StartScanInput } from "./backends/backend.js";
 export type { StartScanInput } from "./backends/backend.js";
 import { detectCarrierSheet, cropCarrierSheet } from "./carrier.js";
 
-import { tailTextFile, resolveJobPath, isExecaError, isNodeError } from "./utils.js";
+import { errorSummary, resolveJobPath, isExecaError, isNodeError, writeFileAtomic } from "./utils.js";
 
-const activeJobs = new Map<string, AbortController>();
+// A job stays here until its terminal state is persisted, so a late cancel_job can see
+// the committed outcome instead of racing a stale "running" manifest.
+const activeJobs = new Map<string, { controller: AbortController; state: Manifest["state"] }>();
 
 export type StartScanResult = {
   job_id: string;
@@ -63,18 +65,11 @@ async function initializeJob(input: StartScanInput, ctx: AppContext): Promise<{ 
 }
 
 
-async function processPages(runDir: string, manifest: Manifest, ctx: AppContext, eventsPath: string): Promise<boolean> {
-  const entries = await fs.readdir(runDir);
-  const pageFiles = entries
-    .filter((f) => f.startsWith("page_") && f.endsWith(".tiff") && !f.endsWith(".cropped.tiff"))
-    .sort();
-  for (let idx = 0; idx < pageFiles.length; idx++) {
-    const f = pageFiles[idx];
-    const p = path.join(runDir, f);
-    manifest.pages.push({ index: idx + 1, path: p, sha256: await hashFile(p) });
-  }
-
-  await detectAndCropCarrierSheets(manifest, ctx, eventsPath);
+async function processPages(runDir: string, manifest: Manifest, ctx: AppContext, eventsPath: string, signal: AbortSignal) {
+  // manifest.pages was filled from the backend's page_scanned events.
+  if (manifest.pages.length === 0) throw new Error("Scanner produced no pages");
+  signal.throwIfAborted();
+  await detectAndCropCarrierSheets(manifest, ctx, eventsPath, signal);
 
   const segments = segmentPages(manifest.pages.map((p) => p.index), manifest.params.doc_break_policy);
   let docIdx = 1;
@@ -84,9 +79,12 @@ async function processPages(runDir: string, manifest: Manifest, ctx: AppContext,
       .map((i) => manifest.pages[i - 1])
       .filter(Boolean)
       .map((pg) => pg!.cropped_path ?? pg!.path);
+    signal.throwIfAborted();
     try {
-      if (segFiles.length > 0) await ctx.backend.assembleTiff(segFiles, outDoc, ctx);
+      if (segFiles.length > 0) await ctx.backend.assembleTiff(segFiles, outDoc, ctx, signal);
     } catch (err) {
+      // A cancel kills tiffcp; that is not an assembly failure.
+      if (signal.aborted) throw err;
       const data: Record<string, unknown> = { document: docIdx, pages: seg, inputs: segFiles, out: outDoc };
       if (isExecaError(err)) {
         data.exitCode = err.exitCode;
@@ -98,20 +96,20 @@ async function processPages(runDir: string, manifest: Manifest, ctx: AppContext,
       }
       await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "document_assembly_failed", data });
       ctx.logger.error({ jobId: manifest.job_id, ...data }, "document assembly failed");
-      return false;
+      throw err;
     }
     manifest.documents.push({ index: docIdx, pages: seg, path: outDoc, sha256: await hashFile(outDoc) });
     docIdx++;
   }
-  return true;
 }
 
-async function detectAndCropCarrierSheets(manifest: Manifest, ctx: AppContext, eventsPath: string) {
+async function detectAndCropCarrierSheets(manifest: Manifest, ctx: AppContext, eventsPath: string, signal: AbortSignal) {
   const { config } = ctx;
   if (config.SCAN_MOCK) return;
 
   const cropRequested = Boolean(manifest.params.crop_carrier_sheets);
   for (const page of manifest.pages) {
+    signal.throwIfAborted();
     try {
       const result = await detectCarrierSheet(page.path, ctx);
       if (!result.detected || !result.band_rows) continue;
@@ -149,7 +147,7 @@ async function detectAndCropCarrierSheets(manifest: Manifest, ctx: AppContext, e
       await appendEvent(eventsPath, {
         ts: new Date().toISOString(),
         type: "carrier_detection_skipped",
-        data: { page: page.index, reason: String(err) },
+        data: { page: page.index, reason: errorSummary(err) },
       });
       if (isNodeError(err) && err.code === "ENOENT") break;
     }
@@ -158,7 +156,7 @@ async function detectAndCropCarrierSheets(manifest: Manifest, ctx: AppContext, e
 
 async function updateManifest(runDir: string, manifest: Manifest) {
   const manifestPath = path.join(runDir, "manifest.json");
-  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  await writeFileAtomic(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
 export async function startScanJob(input: StartScanInput, ctx: AppContext): Promise<StartScanResult> {
@@ -167,55 +165,65 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
   const { runDir, manifest, eventsPath } = await initializeJob(input, ctx);
 
   const controller = new AbortController();
-  activeJobs.set(manifest.job_id, controller);
-  let scanSuccessful: boolean;
+  const { signal } = controller;
+  const active = { controller, state: manifest.state };
+  activeJobs.set(manifest.job_id, active);
   try {
-    ({ ran: scanSuccessful } = await ctx.backend.runScan({
-      input: manifest.params,
-      runDir,
-      ctx,
-      signal: controller.signal,
-      onEvent: (evt) => appendEvent(eventsPath, { ts: new Date().toISOString(), ...evt }),
-    }));
+    let failure: string | undefined;
+    try {
+      await updateManifest(runDir, manifest);
+      signal.throwIfAborted();
+      const result = await ctx.backend.runScan({
+        input: manifest.params,
+        runDir,
+        ctx,
+        signal,
+        onEvent: async (event) => {
+          if (event.type === "page_scanned") {
+            // Persist each reported page immediately (SANE reports its pages once the scanner
+            // exits) so they survive a later cancel or failure.
+            manifest.pages.push({ index: event.index, path: event.path, sha256: await hashFile(event.path) });
+            await updateManifest(runDir, manifest);
+          }
+          await appendEvent(eventsPath, { ts: new Date().toISOString(), ...event });
+        },
+      });
+      signal.throwIfAborted();
+      if (!result.ran) throw new Error("Scanner failed to capture pages");
+      await processPages(runDir, manifest, ctx, eventsPath, signal);
+      signal.throwIfAborted();
+      manifest.state = "completed";
+    } catch (error) {
+      if (signal.aborted) {
+        manifest.state = "cancelled";
+      } else {
+        manifest.state = "error";
+        failure = errorSummary(error);
+        logger.error({ jobId: manifest.job_id, error: failure }, "scan job failed");
+      }
+    }
+    // Commit the outcome in memory before any further I/O: from here on cancel_job sees
+    // the final state, so an acknowledged cancel can't become a completion (or vice versa).
+    active.state = manifest.state;
+    try {
+      await updateManifest(runDir, manifest);
+      await appendEvent(eventsPath, {
+        ts: new Date().toISOString(),
+        type: `job_${manifest.state}`,
+        ...(failure === undefined ? {} : { data: { reason: failure } }),
+      });
+    } catch (err) {
+      // The outcome is already decided; report it rather than rejecting a finished scan.
+      logger.error({ err, jobId: manifest.job_id, state: manifest.state }, "could not persist final job state");
+    }
+    if (manifest.state === "completed" && config.PERSIST_LAST_USED_DEVICE && manifest.device_id) {
+      await saveLastUsedDevice(manifest.device_id, ctx);
+    }
+    logger.debug({ jobId: manifest.job_id, state: manifest.state }, "scan job finished");
+    return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
   } finally {
     activeJobs.delete(manifest.job_id);
   }
-
-  if (!scanSuccessful) {
-    manifest.state = "error";
-    await updateManifest(runDir, manifest);
-    await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_error", data: { reason: "all candidates failed" } });
-
-    const errPath = path.join(runDir, "scanner.err.log");
-    const outPath = path.join(runDir, "scanner.out.log");
-
-    const stderrTail = await tailTextFile(errPath, 120);
-    const stdoutTail = await tailTextFile(outPath, 40);
-
-    logger.error(
-      { jobId: manifest.job_id, runDir, errLog: errPath, outLog: outPath, stderrTail, stdoutTail },
-      "scan job failed"
-    );
-    return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
-  }
-
-  const assembled = await processPages(runDir, manifest, ctx, eventsPath);
-  if (!assembled) {
-    manifest.state = "error";
-    await updateManifest(runDir, manifest);
-    await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_error", data: { reason: "document assembly failed" } });
-    return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
-  }
-
-  manifest.state = "completed";
-  await updateManifest(runDir, manifest);
-  await appendEvent(eventsPath, { ts: new Date().toISOString(), type: "job_completed" });
-  if (config.PERSIST_LAST_USED_DEVICE && manifest.device_id) {
-    await saveLastUsedDevice(manifest.device_id, config);
-  }
-  logger.debug({ jobId: manifest.job_id }, "scan job completed");
-
-  return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
 }
 
 export async function getJobStatus(jobId: string, ctx: AppContext, baseDir?: string) {
@@ -236,21 +244,29 @@ export async function cancelJob(jobId: string, ctx: AppContext, baseDir?: string
   const { logger } = ctx;
   const runDir = resolveJobPath(jobId, baseDir ?? ctx.config.INBOX_DIR);
 
-  // Terminate the running process, if it exists
-  if (activeJobs.has(jobId)) {
-    activeJobs.get(jobId)?.abort();
-    activeJobs.delete(jobId);
+  // A job running in this process: abort it and let startScanJob record the outcome.
+  const active = activeJobs.get(jobId);
+  if (active) {
+    if (active.state !== "running") return terminalCancellationResult(active.state);
+    active.controller.abort();
+    return { ok: true } as const;
   }
 
-  // Update the manifest to reflect the cancellation
+  // Not running here (e.g. a manifest left by a previous server process): mark it cancelled.
   const manifestPath = path.join(runDir, "manifest.json");
   if (!(await fileExists(manifestPath))) return { ok: false, error: "manifest not found" } as const;
   const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
+  if (manifest.state !== "running") return terminalCancellationResult(manifest.state);
   manifest.state = "cancelled";
-  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+  await writeFileAtomic(manifestPath, JSON.stringify(manifest, null, 2));
   await appendEvent(path.join(runDir, "events.jsonl"), { ts: new Date().toISOString(), type: "job_cancelled" });
   logger.debug({ jobId }, "scan job cancelled");
   return { ok: true } as const;
+}
+
+// Cancelling an already-cancelled job is a no-op; a job that completed or failed cannot be cancelled.
+function terminalCancellationResult(state: string) {
+  return state === "cancelled" ? ({ ok: true } as const) : ({ ok: false, error: `job is already ${state}` } as const);
 }
 
 export type JobInfo = {
@@ -475,11 +491,13 @@ async function lastUsedPath(config: AppConfig) {
   return path.join(await stateDir(config), "scan-mcp.json");
 }
 
-async function saveLastUsedDevice(deviceId: string, config: AppConfig) {
-  const p = await lastUsedPath(config);
+// Remembering the device is a convenience: failing to save it must not fail a finished scan.
+async function saveLastUsedDevice(deviceId: string, { config, logger }: AppContext) {
   try {
-    await fs.writeFile(p, JSON.stringify({ device_id: deviceId }, null, 2));
-  } catch {}
+    await fs.writeFile(await lastUsedPath(config), JSON.stringify({ device_id: deviceId }, null, 2));
+  } catch (err) {
+    logger.warn({ err, deviceId }, "could not persist last-used device");
+  }
 }
 
 async function loadLastUsedDevice(config: AppConfig): Promise<string | null> {

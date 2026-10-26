@@ -1,6 +1,6 @@
-import { createWriteStream, type WriteStream } from "fs";
+import { promises as fs, createWriteStream, type WriteStream } from "fs";
 import path from "path";
-import { execa, type Subprocess } from "execa";
+import { execa } from "execa";
 import type { AppContext } from "../../context.js";
 import {
   A4_HEIGHT_MM,
@@ -19,6 +19,9 @@ import type {
   RunScanResult,
   StartScanInput,
 } from "./backend.js";
+
+// How long a scanner process gets to honor SIGTERM before it is SIGKILLed.
+const FORCE_KILL_AFTER_MS = 1000;
 
 export class SaneBackend implements Backend {
   readonly name = "sane" as const;
@@ -64,9 +67,9 @@ export class SaneBackend implements Backend {
     }
   }
 
-  async assembleTiff(pages: string[], output: string, ctx: AppContext): Promise<void> {
+  async assembleTiff(pages: string[], output: string, ctx: AppContext, signal: AbortSignal): Promise<void> {
     // Failures propagate: silently substituting page 1 would drop pages from the document.
-    await execa(ctx.config.TIFFCP_BIN, [...pages, output], { shell: false });
+    await execa(ctx.config.TIFFCP_BIN, [...pages, output], { shell: false, cancelSignal: signal, forceKillAfterDelay: FORCE_KILL_AFTER_MS });
   }
 
   async runScan(args: RunScanArgs): Promise<RunScanResult> {
@@ -74,76 +77,81 @@ export class SaneBackend implements Backend {
     const { logger } = ctx;
     const candidates = planScanCommands(input, runDir, ctx);
 
-    let active: Subprocess | undefined;
-    const onAbort = () => {
-      if (active) {
-        active.kill("SIGTERM", new Error("MCP_CANCEL_REQUEST"));
-      }
-    };
-    signal.addEventListener("abort", onAbort);
-
     let ran = false;
-    try {
-      for (const c of candidates) {
-        const outPath = path.join(runDir, "scanner.out.log");
-        const errPath = path.join(runDir, "scanner.err.log");
-        let outStream: WriteStream | undefined;
-        let errStream: WriteStream | undefined;
-        try {
-          await onEvent({ type: "scanner_exec", data: { bin: c.bin, args: c.args, runDir } });
-          logger.debug({ cmd: c, runDir }, "scanner exec");
-          // Do not inherit stdio; pipe and persist logs to files to avoid polluting MCP stdout
-          const proc = execa(c.bin, c.args, { cwd: runDir, shell: false });
-          active = proc;
-          outStream = createWriteStream(outPath, { flags: "a" });
-          errStream = createWriteStream(errPath, { flags: "a" });
-          proc.stdout?.pipe(outStream);
-          proc.stderr?.pipe(errStream);
-          await proc;
-          ran = true;
+    for (const c of candidates) {
+      if (signal.aborted) break;
+      const outPath = path.join(runDir, "scanner.out.log");
+      const errPath = path.join(runDir, "scanner.err.log");
+      let outStream: WriteStream | undefined;
+      let errStream: WriteStream | undefined;
+      try {
+        await onEvent({ type: "scanner_exec", data: { bin: c.bin, args: c.args, runDir } });
+        // Cancellation can arrive while the event is being persisted.
+        signal.throwIfAborted();
+        logger.debug({ cmd: c, runDir }, "scanner exec");
+        // Do not inherit stdio; pipe and persist logs to files to avoid polluting MCP stdout.
+        // cancelSignal sends SIGTERM; forceKillAfterDelay escalates to SIGKILL if it is ignored.
+        const proc = execa(c.bin, c.args, { cwd: runDir, shell: false, cancelSignal: signal, forceKillAfterDelay: FORCE_KILL_AFTER_MS });
+        outStream = createWriteStream(outPath, { flags: "a" });
+        errStream = createWriteStream(errPath, { flags: "a" });
+        proc.stdout?.pipe(outStream);
+        proc.stderr?.pipe(errStream);
+        await proc;
+        ran = true;
+        break;
+      } catch (err) {
+        if (signal.aborted) {
+          // A user cancel is not a scanner failure; don't record it as one.
+          logger.debug({ cmd: c, runDir }, "scanner command cancelled");
           break;
-        } catch (err) {
-          const stderrTail = await tailTextFile(errPath, 120);
-          const stdoutTail = await tailTextFile(outPath, 60);
-
-          const errorInfo: Record<string, unknown> = {
-            runDir,
-            cmd: c,
-            stderrTail,
-            stdoutTail,
-          };
-
-          if (isExecaError(err)) {
-            errorInfo.kind = "execa";
-            errorInfo.exitCode = err.exitCode;
-            errorInfo.signal = err.signal;
-            errorInfo.shortMessage = err.shortMessage;
-            errorInfo.originalMessage = err.originalMessage;
-          } else if (isNodeError(err)) {
-            errorInfo.kind = "node";
-            errorInfo.code = err.code;
-            errorInfo.errno = err.errno;
-            errorInfo.message = err.message;
-            errorInfo.name = err.name;
-            errorInfo.stack = err.stack;
-          } else {
-            errorInfo.kind = "unknown";
-            errorInfo.error = String(err);
-          }
-
-          await onEvent({ type: "scanner_failed", data: errorInfo });
-          logger.error(errorInfo, "scanner command failed");
-          continue;
-        } finally {
-          active = undefined;
-          try { outStream?.end(); } catch {}
-          try { errStream?.end(); } catch {}
         }
+        const stderrTail = await tailTextFile(errPath, 120);
+        const stdoutTail = await tailTextFile(outPath, 60);
+
+        const errorInfo: Record<string, unknown> = {
+          runDir,
+          cmd: c,
+          stderrTail,
+          stdoutTail,
+        };
+
+        if (isExecaError(err)) {
+          errorInfo.kind = "execa";
+          errorInfo.exitCode = err.exitCode;
+          errorInfo.signal = err.signal;
+          errorInfo.shortMessage = err.shortMessage;
+          errorInfo.originalMessage = err.originalMessage;
+        } else if (isNodeError(err)) {
+          errorInfo.kind = "node";
+          errorInfo.code = err.code;
+          errorInfo.errno = err.errno;
+          errorInfo.message = err.message;
+          errorInfo.name = err.name;
+          errorInfo.stack = err.stack;
+        } else {
+          errorInfo.kind = "unknown";
+          errorInfo.error = String(err);
+        }
+
+        await onEvent({ type: "scanner_failed", data: errorInfo });
+        logger.error(errorInfo, "scanner command failed");
+        continue;
+      } finally {
+        try { outStream?.end(); } catch {}
+        try { errStream?.end(); } catch {}
       }
-    } finally {
-      signal.removeEventListener("abort", onAbort);
     }
+    // scanimage --batch renames each page into place when it is complete and removes the
+    // in-progress file on cancel, so whatever matches here is finished, even after a failure.
+    await reportCompletedPages(runDir, onEvent);
     return { ran };
+  }
+}
+
+async function reportCompletedPages(runDir: string, onEvent: RunScanArgs["onEvent"]): Promise<void> {
+  const pageFiles = (await fs.readdir(runDir)).filter((f) => /^page_\d+\.tiff$/.test(f)).sort();
+  for (const [i, file] of pageFiles.entries()) {
+    await onEvent({ type: "page_scanned", index: i + 1, path: path.join(runDir, file) });
   }
 }
 

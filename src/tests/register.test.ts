@@ -31,10 +31,11 @@ describe("registerScanServer", () => {
   let server: McpServer;
   let client: Client;
   let inboxDir: string;
+  let ctx: AppContext;
 
   beforeEach(async () => {
     inboxDir = await fs.mkdtemp(path.join(os.tmpdir(), "scan-mcp-register-"));
-    const ctx: AppContext = { config: { ...baseConfig, INBOX_DIR: inboxDir }, logger, backend: new MockBackend() };
+    ctx = { config: { ...baseConfig, INBOX_DIR: inboxDir }, logger, backend: new MockBackend() };
     server = new McpServer({ name: "scan-mcp", version });
     registerScanServer(server, ctx);
     client = new Client({ name: "scan-mcp-test", version: "1.0.0" });
@@ -105,6 +106,38 @@ describe("registerScanServer", () => {
       if (content.type !== "text") throw new Error("expected a text tool result");
       expect(JSON.parse(content.text).state).toBe("completed");
     }
+  });
+
+  it("cancels an in-flight scan through the public MCP protocol", async () => {
+    let entered!: (jobId: string) => void;
+    let release!: () => void;
+    const ready = new Promise<string>(resolve => { entered = resolve; });
+    const blocked = new Promise<void>(resolve => { release = resolve; });
+    const capture = vi.spyOn(ctx.backend, "runScan").mockImplementationOnce(async ({ runDir }) => {
+      entered(path.basename(runDir));
+      await blocked;
+      return { ran: true };
+    });
+    const parseTool = async (pending: ReturnType<Client["callTool"]>): Promise<Record<string, unknown>> => {
+      const result = CallToolResultSchema.parse(await pending);
+      expect(result.isError).not.toBe(true);
+      const content = result.content[0];
+      if (content.type !== "text") throw new Error("expected text tool result");
+      return JSON.parse(content.text) as Record<string, unknown>;
+    };
+    const pending = client.callTool({ name: "start_scan_job", arguments: {} });
+    let jobId: string;
+    try {
+      jobId = await ready;
+      expect(await parseTool(client.callTool({ name: "get_job_status", arguments: { job_id: jobId } }))).toMatchObject({ state: "running" });
+      expect(await parseTool(client.callTool({ name: "cancel_job", arguments: { job_id: jobId } }))).toEqual({ ok: true });
+    } finally {
+      release();
+      await pending;
+      capture.mockRestore();
+    }
+    expect(await parseTool(pending)).toMatchObject({ job_id: jobId, state: "cancelled" });
+    expect(await parseTool(client.callTool({ name: "get_job_status", arguments: { job_id: jobId } }))).toMatchObject({ state: "cancelled", pages: 0, documents: 0 });
   });
 
   it("get_manifest rejects malicious job_id", async () => {

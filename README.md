@@ -125,11 +125,13 @@ scan-mcp --http
 
 - **get_job_status**
   - Inspect job state and artifact counts.
+  - A job ends as `completed`, `cancelled`, or `error`. A scan that produces no pages is `error`. If TIFF assembly (`tiffcp`) fails, the job is `error` and the raw `page_NNNN.tiff` files are kept; no partial document is substituted.
   - Inputs:
     - `job_id` (string)
 
 - **cancel_job**
-  - Request job cancellation; best effort during scan loops.
+  - Cancel a running job. The scanner process is terminated (SIGTERM, then SIGKILL if it ignores it) and the job ends as `cancelled`. Pages already completed are kept on disk and listed in the manifest, as they are for a job that ends in `error`.
+  - Returns `{ ok: true }` once the cancel is accepted (`get_job_status` may show `running` briefly, until the scanner process exits); repeating it on a cancelled job is harmless. Returns `{ ok: false, error }` if the job has already `completed` or ended in `error`, or does not exist.
   - Inputs:
     - `job_id` (string)
 
