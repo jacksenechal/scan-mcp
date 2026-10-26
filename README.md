@@ -118,7 +118,7 @@ scan-mcp --http
     - `duplex` (boolean)
     - `page_size` (`Letter` | `A4` | `Legal` | `Custom`)
     - `custom_size_mm` { `width`, `height` }
-    - `doc_break_policy` { `type`, `blank_threshold`, `page_count`, `timer_ms`, `barcode_values` } (only `none` and `page_count` are implemented; `blank_page`, `timer`, and `barcode` are rejected with an error)
+    - `doc_break_policy` { `type` (`page_count` | `none`), `page_count` }: split the batch into documents of `page_count` pages
     - `output_format` (string, default `tiff`)
     - `tmp_dir` (string)
     - `crop_carrier_sheets` (boolean, default `false`): detect carrier-sheet leading-edge band and write cropped page derivatives; raw pages are kept

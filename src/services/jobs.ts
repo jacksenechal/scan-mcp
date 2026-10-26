@@ -27,11 +27,8 @@ export type StartScanInput = {
   page_size?: "Letter" | "A4" | "Legal" | "Custom";
   custom_size_mm?: { width: number; height: number };
   doc_break_policy?: {
-    type?: "blank_page" | "page_count" | "timer" | "barcode" | "none";
-    blank_threshold?: number;
+    type?: "page_count" | "none";
     page_count?: number;
-    timer_ms?: number;
-    barcode_values?: string[];
   };
   output_format?: string;
   tmp_dir?: string;
@@ -270,18 +267,8 @@ async function updateManifest(runDir: string, manifest: Manifest) {
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
-const UNIMPLEMENTED_BREAK_TYPES = ["blank_page", "timer", "barcode"] as const;
-
-function assertSupportedDocBreakPolicy(policy: StartScanInput["doc_break_policy"]) {
-  const type = policy?.type;
-  if (type && (UNIMPLEMENTED_BREAK_TYPES as readonly string[]).includes(type)) {
-    throw new Error(`doc_break_policy.type "${type}" is not implemented; use "page_count" or "none"`);
-  }
-}
-
 export async function startScanJob(input: StartScanInput, ctx: AppContext): Promise<StartScanResult> {
   const { logger, config } = ctx;
-  assertSupportedDocBreakPolicy(input.doc_break_policy);
   logger.debug({ input }, "start scan job");
   const { runDir, manifest, eventsPath } = await initializeJob(input, ctx);
 
@@ -505,7 +492,6 @@ export function segmentPages(pages: number[], policy?: StartScanInput["doc_break
     }
     return out;
   }
-  // blank_page/timer/barcode are rejected up front by startScanJob.
   return [pages];
 }
 

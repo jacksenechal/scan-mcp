@@ -28,6 +28,6 @@ This document outlines the architecture and goals of the scan-mcp server.
 ## Implementation notes
 - Capture runs a single `scanimage --batch` command (`planScanCommands` in `src/services/jobs.ts`).
 - Multipage TIFFs are assembled with `tiffcp`. ImageMagick `convert` is used for carrier-sheet detection and cropping, not for assembly.
-- Document breaks: only `page_count` is implemented. Other break types are on the roadmap (`docs/ROADMAP.md`).
+- Document breaks: `page_count` splits a batch every N pages. Other break types are on the roadmap (`docs/ROADMAP.md`).
 - Manifest structure defined in `schemas/manifest.schema.json`.
 - Provenance: every page and assembled document carries its own sha256 in the manifest. The document hash is the hash of the assembled file; there is no de-duplication across jobs.
