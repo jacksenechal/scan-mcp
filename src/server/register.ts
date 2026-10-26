@@ -65,7 +65,11 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     "start_scan_job",
     "Start a scan job; auto-selects device and fills defaults when omitted",
     StartScanInputShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await startScanJob(StartScanInputShape.parse(args), ctx)) }] })
+    async (args) => {
+      const result = await startScanJob(StartScanInputShape.parse(args), ctx);
+      // Same body either way so clients still get job_id and run_dir; a failed scan is flagged.
+      return { content: [{ type: "text", text: JSON.stringify(result) }], ...(result.state === "error" ? { isError: true } : {}) };
+    }
   );
 
   const JobIdShape = z.object({ job_id: z.string() });
@@ -80,7 +84,10 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     "cancel_job",
     "Cancel a running scan job",
     JobIdShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await cancelJob(JobIdShape.parse(args).job_id, ctx)) }] })
+    async (args) => {
+      const result = await cancelJob(JobIdShape.parse(args).job_id, ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result) }], ...(result.ok ? {} : { isError: true }) };
+    }
   );
 
   const ListJobsInput = z.object({

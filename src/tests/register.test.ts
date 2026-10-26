@@ -171,6 +171,29 @@ describe("registerScanServer", () => {
     expect(JSON.stringify(result.content)).toContain("scanimage missing");
   });
 
+  it("start_scan_job flags a failed scan as an error result that still carries job_id and run_dir", async () => {
+    vi.spyOn(ctx.backend, "runScan").mockRejectedValueOnce(new Error("paper jam"));
+    const result = CallToolResultSchema.parse(await client.callTool({ name: "start_scan_job", arguments: {} }));
+    expect(result.isError).toBe(true);
+    const content = result.content[0];
+    if (content.type !== "text") throw new Error("expected a text tool result");
+    expect(JSON.parse(content.text)).toMatchObject({
+      job_id: expect.stringMatching(/^job-/),
+      run_dir: expect.any(String),
+      state: "error",
+      error: "paper jam",
+    });
+  });
+
+  it("cancel_job flags a failed cancel as an error result", async () => {
+    const result = CallToolResultSchema.parse(await client.callTool({
+      name: "cancel_job",
+      arguments: { job_id: "job-00000000-0000-0000-0000-000000000000" },
+    }));
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("manifest not found");
+  });
+
   it("get_manifest rejects malicious job_id", async () => {
     const result = CallToolResultSchema.parse(await client.callTool({
       name: "get_manifest",
