@@ -10,7 +10,7 @@ import {
   LETTER_HEIGHT_MM,
   LETTER_WIDTH_MM,
 } from "../../constants.js";
-import { tailTextFile, isExecaError, isNodeError } from "../utils.js";
+import { tailTextFile, isExecaError, isNodeError, errorSummary } from "../utils.js";
 import type {
   Backend,
   Device,
@@ -32,14 +32,14 @@ export class SaneBackend implements Backend {
       const { stdout } = await execa(config.SCANIMAGE_BIN, ["-L"], { shell: false });
       const devices = parseScanimageList(stdout);
       // Filter out excluded backends (e.g., v4l by default)
-      const filtered = devices.filter((d) => {
+      return devices.filter((d) => {
         const backend = String(d.id.split(":")[0] || "");
         return !config.SCAN_EXCLUDE_BACKENDS.includes(backend);
       });
-      return filtered;
     } catch (err) {
+      // A crashed or missing scanimage must not look like "no scanners connected".
       logger.error({ err }, "Failed to list devices");
-      return [];
+      throw new Error(`Failed to list devices: ${errorSummary(err)}`, { cause: err });
     }
   }
 
@@ -50,7 +50,7 @@ export class SaneBackend implements Backend {
       return parseScanimageOptions(stdout);
     } catch (err) {
       logger.error({ err, deviceId }, "Failed to get device options");
-      return {};
+      throw new Error(`Failed to get options for device ${deviceId}: ${errorSummary(err)}`, { cause: err });
     }
   }
 

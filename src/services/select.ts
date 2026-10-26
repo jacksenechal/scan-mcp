@@ -22,6 +22,7 @@ export async function selectDevice(
   if (devices.length === 0) return null;
 
   const results: SelectionResult[] = [];
+  const probeFailures: unknown[] = [];
   for (const d of devices) {
     const backendPrefix = String(d.id.split(":")[0] || "");
     // Exclude backends outright
@@ -74,10 +75,12 @@ export async function selectDevice(
         score += 5;
         rationale.push("preferred backend:" + backendPrefix);
       }
-    } catch {
-      // If options probing fails, lightly penalize but still consider
-      score -= 5;
-      rationale.push("options probe failed");
+    } catch (err) {
+      // A device we cannot probe cannot be scanned reliably; skip it and consider the rest.
+      ctx.logger.warn({ err, deviceId: d.id }, "skipping device: options probe failed");
+      probeFailures.push(err);
+      results.push({ deviceId: d.id, score: -Infinity, rationale: ["options probe failed"] });
+      continue;
     }
 
     if (backendPrefix === "v4l") {
@@ -95,6 +98,10 @@ export async function selectDevice(
 
   results.sort((a, b) => (b.score - a.score) || a.deviceId.localeCompare(b.deviceId));
   const top = results[0];
-  if (!top || !isFinite(top.score)) return null;
+  if (!top || !isFinite(top.score)) {
+    // Nothing usable because probes failed: surface why, rather than reporting "no devices".
+    if (probeFailures.length > 0) throw probeFailures[0];
+    return null;
+  }
   return top;
 }
