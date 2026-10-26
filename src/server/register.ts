@@ -52,11 +52,8 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     custom_size_mm: nullToUndef(z.object({ width: z.number(), height: z.number() })),
     doc_break_policy: nullToUndef(
       z.object({
-        type: nullToUndef(z.enum(["blank_page", "page_count", "timer", "barcode", "none"])),
-        blank_threshold: nullToUndef(z.number()),
+        type: nullToUndef(z.enum(["page_count", "none"])),
         page_count: nullToUndef(z.number().int()),
-        timer_ms: nullToUndef(z.number().int()),
-        barcode_values: nullToUndef(z.array(z.string())),
       })
     ),
     output_format: nullToUndef(z.string()),

@@ -27,11 +27,8 @@ export type StartScanInput = {
   page_size?: "Letter" | "A4" | "Legal" | "Custom";
   custom_size_mm?: { width: number; height: number };
   doc_break_policy?: {
-    type?: "blank_page" | "page_count" | "timer" | "barcode" | "none";
-    blank_threshold?: number;
+    type?: "page_count" | "none";
     page_count?: number;
-    timer_ms?: number;
-    barcode_values?: string[];
   };
   output_format?: string;
   tmp_dir?: string;
@@ -495,7 +492,6 @@ export function segmentPages(pages: number[], policy?: StartScanInput["doc_break
     }
     return out;
   }
-  // Future: blank_page/timer/barcode
   return [pages];
 }
 

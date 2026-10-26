@@ -19,6 +19,10 @@ describe("http server", () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
+  it("binds to localhost by default", () => {
+    expect((server.address() as AddressInfo).address).toBe("127.0.0.1");
+  });
+
   it("responds to tools.list via /mcp", async () => {
     const response = await fetch(`${baseUrl}/mcp`, {
       method: "POST",
