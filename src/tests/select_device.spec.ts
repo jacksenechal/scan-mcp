@@ -49,4 +49,28 @@ describe("device selection", () => {
     expect(sel).not.toBeNull();
     expect(sel!.deviceId).toBe("xyz:000:001");
   });
+
+  it("skips a device whose options probe fails and picks another", async () => {
+    vi.spyOn(ctx.backend, "listDevices").mockResolvedValue([
+      { id: "aaa:broken" },
+      { id: "zzz:working" },
+    ]);
+    vi.spyOn(ctx.backend, "getDeviceOptions").mockImplementation(async (id: string) => {
+      if (id === "aaa:broken") throw new Error("scanimage crashed");
+      return { sources: ["Flatbed"] };
+    });
+    const sel = await selectDevice({}, ctx);
+    expect(sel!.deviceId).toBe("zzz:working");
+  });
+
+  it("surfaces the probe error when every device fails to probe", async () => {
+    vi.spyOn(ctx.backend, "listDevices").mockResolvedValue([{ id: "aaa:broken" }]);
+    vi.spyOn(ctx.backend, "getDeviceOptions").mockRejectedValue(new Error("scanimage crashed"));
+    await expect(selectDevice({}, ctx)).rejects.toThrow("scanimage crashed");
+  });
+
+  it("propagates a listDevices failure", async () => {
+    vi.spyOn(ctx.backend, "listDevices").mockRejectedValue(new Error("no scanimage"));
+    await expect(selectDevice({}, ctx)).rejects.toThrow("no scanimage");
+  });
 });

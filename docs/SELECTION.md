@@ -23,6 +23,8 @@ If you do not pass `device_id`, `selectDevice` ranks candidates:
 - Last used: light bump if it matches the saved device ID (when persistence enabled).
 - Tie-break: score descending, then `deviceId` lexicographically.
 
+A device whose options cannot be probed is skipped. If every candidate fails to probe, or the device list itself cannot be read, `start_scan_job` fails with that error. An explicit `device_id` is never replaced by a different device: if it cannot be probed, the call fails before any job is created.
+
 If no viable devices remain (e.g., only excluded backends), the system’s default may be used.
 
 ## Resolution Choice

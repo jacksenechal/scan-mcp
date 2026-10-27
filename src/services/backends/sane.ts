@@ -10,7 +10,7 @@ import {
   LETTER_HEIGHT_MM,
   LETTER_WIDTH_MM,
 } from "../../constants.js";
-import { tailTextFile, isExecaError, isNodeError } from "../utils.js";
+import { tailTextFile, isExecaError, isNodeError, errorSummary } from "../utils.js";
 import type {
   Backend,
   Device,
@@ -32,14 +32,14 @@ export class SaneBackend implements Backend {
       const { stdout } = await execa(config.SCANIMAGE_BIN, ["-L"], { shell: false });
       const devices = parseScanimageList(stdout);
       // Filter out excluded backends (e.g., v4l by default)
-      const filtered = devices.filter((d) => {
+      return devices.filter((d) => {
         const backend = String(d.id.split(":")[0] || "");
         return !config.SCAN_EXCLUDE_BACKENDS.includes(backend);
       });
-      return filtered;
     } catch (err) {
+      // A crashed or missing scanimage must not look like "no scanners connected".
       logger.error({ err }, "Failed to list devices");
-      return [];
+      throw new Error(`Failed to list devices: ${errorSummary(err)}`, { cause: err });
     }
   }
 
@@ -50,7 +50,7 @@ export class SaneBackend implements Backend {
       return parseScanimageOptions(stdout);
     } catch (err) {
       logger.error({ err, deviceId }, "Failed to get device options");
-      return {};
+      throw new Error(`Failed to get options for device ${deviceId}: ${errorSummary(err)}`, { cause: err });
     }
   }
 
@@ -75,42 +75,42 @@ export class SaneBackend implements Backend {
   async runScan(args: RunScanArgs): Promise<RunScanResult> {
     const { input, runDir, ctx, signal, onEvent } = args;
     const { logger } = ctx;
-    const candidates = planScanCommands(input, runDir, ctx);
+    const cmd = planScanCommand(input, runDir, ctx);
 
     let ran = false;
-    for (const c of candidates) {
-      if (signal.aborted) break;
-      const outPath = path.join(runDir, "scanner.out.log");
-      const errPath = path.join(runDir, "scanner.err.log");
-      let outStream: WriteStream | undefined;
-      let errStream: WriteStream | undefined;
-      try {
-        await onEvent({ type: "scanner_exec", data: { bin: c.bin, args: c.args, runDir } });
-        // Cancellation can arrive while the event is being persisted.
-        signal.throwIfAborted();
-        logger.debug({ cmd: c, runDir }, "scanner exec");
-        // Do not inherit stdio; pipe and persist logs to files to avoid polluting MCP stdout.
-        // cancelSignal sends SIGTERM; forceKillAfterDelay escalates to SIGKILL if it is ignored.
-        const proc = execa(c.bin, c.args, { cwd: runDir, shell: false, cancelSignal: signal, forceKillAfterDelay: FORCE_KILL_AFTER_MS });
-        outStream = createWriteStream(outPath, { flags: "a" });
-        errStream = createWriteStream(errPath, { flags: "a" });
-        proc.stdout?.pipe(outStream);
-        proc.stderr?.pipe(errStream);
-        await proc;
-        ran = true;
-        break;
-      } catch (err) {
-        if (signal.aborted) {
-          // A user cancel is not a scanner failure; don't record it as one.
-          logger.debug({ cmd: c, runDir }, "scanner command cancelled");
-          break;
-        }
+    const outPath = path.join(runDir, "scanner.out.log");
+    const errPath = path.join(runDir, "scanner.err.log");
+    let outStream: WriteStream | undefined;
+    let errStream: WriteStream | undefined;
+    try {
+      // Never start a scanner for a job that was cancelled before it began.
+      signal.throwIfAborted();
+      await onEvent({ type: "scanner_exec", data: { bin: cmd.bin, args: cmd.args, runDir } });
+      // Cancellation can arrive while the event is being persisted.
+      signal.throwIfAborted();
+      logger.debug({ cmd, runDir }, "scanner exec");
+      // Do not inherit stdio; pipe and persist logs to files to avoid polluting MCP stdout.
+      // cancelSignal sends SIGTERM; forceKillAfterDelay escalates to SIGKILL if it is ignored.
+      const proc = execa(cmd.bin, cmd.args, { cwd: runDir, shell: false, cancelSignal: signal, forceKillAfterDelay: FORCE_KILL_AFTER_MS });
+      outStream = createWriteStream(outPath, { flags: "a" });
+      errStream = createWriteStream(errPath, { flags: "a" });
+      proc.stdout?.pipe(outStream);
+      proc.stderr?.pipe(errStream);
+      await proc;
+      ran = true;
+    } catch (err) {
+      if (signal.aborted) {
+        // A user cancel is not a scanner failure; don't record it as one.
+        logger.debug({ cmd, runDir }, "scanner command cancelled");
+      } else {
+        // Flush the log files first: the tails below must include the scanner's last lines.
+        await Promise.all([endStream(outStream), endStream(errStream)]);
         const stderrTail = await tailTextFile(errPath, 120);
         const stdoutTail = await tailTextFile(outPath, 60);
 
         const errorInfo: Record<string, unknown> = {
           runDir,
-          cmd: c,
+          cmd,
           stderrTail,
           stdoutTail,
         };
@@ -135,17 +135,24 @@ export class SaneBackend implements Backend {
 
         await onEvent({ type: "scanner_failed", data: errorInfo });
         logger.error(errorInfo, "scanner command failed");
-        continue;
-      } finally {
-        try { outStream?.end(); } catch {}
-        try { errStream?.end(); } catch {}
       }
+    } finally {
+      await Promise.all([endStream(outStream), endStream(errStream)]);
     }
     // scanimage --batch renames each page into place when it is complete and removes the
     // in-progress file on cancel, so whatever matches here is finished, even after a failure.
     await reportCompletedPages(runDir, onEvent);
     return { ran };
   }
+}
+
+// Ends a log stream and resolves once its data is on disk (or the stream has failed). Safe to call twice.
+function endStream(stream: WriteStream | undefined): Promise<void> {
+  if (!stream || stream.closed) return Promise.resolve();
+  return new Promise((resolve) => {
+    stream.once("close", resolve);
+    stream.end();
+  });
 }
 
 async function reportCompletedPages(runDir: string, onEvent: RunScanArgs["onEvent"]): Promise<void> {
@@ -212,14 +219,13 @@ function extractEnumValues(line: string): string[] {
     .filter(Boolean);
 }
 
-export function planScanCommands(
+export function planScanCommand(
   input: StartScanInput,
   runDir: string,
   ctx: AppContext
-): { bin: string; args: string[] }[] {
+): { bin: string; args: string[] } {
   const batchPattern = path.join(runDir, "page_%04d.tiff");
-  const baseArgs = buildCommonArgs(input, batchPattern);
-  return [{ bin: ctx.config.SCANIMAGE_BIN, args: baseArgs }];
+  return { bin: ctx.config.SCANIMAGE_BIN, args: buildCommonArgs(input, batchPattern) };
 }
 
 function buildCommonArgs(input: StartScanInput, batchPattern: string): string[] {

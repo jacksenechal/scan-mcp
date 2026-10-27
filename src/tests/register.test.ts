@@ -140,6 +140,60 @@ describe("registerScanServer", () => {
     expect(await parseTool(client.callTool({ name: "get_job_status", arguments: { job_id: jobId } }))).toMatchObject({ state: "cancelled", pages: 0, documents: 0 });
   });
 
+  it("list_devices and get_device_options return error results when the backend fails", async () => {
+    vi.spyOn(ctx.backend, "listDevices").mockRejectedValue(new Error("Failed to list devices: scanimage missing"));
+    vi.spyOn(ctx.backend, "getDeviceOptions").mockRejectedValue(new Error("Failed to get options for device d: boom"));
+    const list = CallToolResultSchema.parse(await client.callTool({ name: "list_devices", arguments: {} }));
+    expect(list.isError).toBe(true);
+    expect(JSON.stringify(list.content)).toContain("scanimage missing");
+    const opts = CallToolResultSchema.parse(await client.callTool({ name: "get_device_options", arguments: { device_id: "d" } }));
+    expect(opts.isError).toBe(true);
+    expect(JSON.stringify(opts.content)).toContain("boom");
+  });
+
+  it("start_scan_job fails without creating a job when an explicit device cannot be probed", async () => {
+    vi.spyOn(ctx.backend, "getDeviceOptions").mockRejectedValue(new Error("Failed to get options for device d1: boom"));
+    const list = vi.spyOn(ctx.backend, "listDevices");
+    const scan = vi.spyOn(ctx.backend, "runScan");
+    const result = CallToolResultSchema.parse(await client.callTool({ name: "start_scan_job", arguments: { device_id: "d1" } }));
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("boom");
+    // Never falls back to auto-selection or scans.
+    expect(list).not.toHaveBeenCalled();
+    expect(scan).not.toHaveBeenCalled();
+    expect((await fs.readdir(inboxDir)).filter((f) => f.startsWith("job-"))).toEqual([]);
+  });
+
+  it("start_scan_job fails with the listDevices message during auto-selection", async () => {
+    vi.spyOn(ctx.backend, "listDevices").mockRejectedValue(new Error("Failed to list devices: scanimage missing"));
+    const result = CallToolResultSchema.parse(await client.callTool({ name: "start_scan_job", arguments: {} }));
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("scanimage missing");
+  });
+
+  it("start_scan_job flags a failed scan as an error result that still carries job_id and run_dir", async () => {
+    vi.spyOn(ctx.backend, "runScan").mockRejectedValueOnce(new Error("paper jam"));
+    const result = CallToolResultSchema.parse(await client.callTool({ name: "start_scan_job", arguments: {} }));
+    expect(result.isError).toBe(true);
+    const content = result.content[0];
+    if (content.type !== "text") throw new Error("expected a text tool result");
+    expect(JSON.parse(content.text)).toMatchObject({
+      job_id: expect.stringMatching(/^job-/),
+      run_dir: expect.any(String),
+      state: "error",
+      error: "paper jam",
+    });
+  });
+
+  it("cancel_job flags a failed cancel as an error result", async () => {
+    const result = CallToolResultSchema.parse(await client.callTool({
+      name: "cancel_job",
+      arguments: { job_id: "job-00000000-0000-0000-0000-000000000000" },
+    }));
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("manifest not found");
+  });
+
   it("get_manifest rejects malicious job_id", async () => {
     const result = CallToolResultSchema.parse(await client.callTool({
       name: "get_manifest",

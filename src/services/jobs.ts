@@ -20,6 +20,8 @@ export type StartScanResult = {
   job_id: string;
   run_dir: string;
   state: "running" | "completed" | "cancelled" | "error";
+  // Why the job ended in state "error".
+  error?: string;
 };
 
 type Manifest = {
@@ -168,8 +170,8 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
   const { signal } = controller;
   const active = { controller, state: manifest.state };
   activeJobs.set(manifest.job_id, active);
+  let failure: string | undefined;
   try {
-    let failure: string | undefined;
     try {
       await updateManifest(runDir, manifest);
       signal.throwIfAborted();
@@ -220,7 +222,12 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext): Prom
       await saveLastUsedDevice(manifest.device_id, ctx);
     }
     logger.debug({ jobId: manifest.job_id, state: manifest.state }, "scan job finished");
-    return { job_id: manifest.job_id, run_dir: runDir, state: manifest.state };
+    return {
+      job_id: manifest.job_id,
+      run_dir: runDir,
+      state: manifest.state,
+      ...(failure === undefined ? {} : { error: failure }),
+    };
   } finally {
     activeJobs.delete(manifest.job_id);
   }

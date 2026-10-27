@@ -13,6 +13,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 const mode = process.argv[process.argv.indexOf('-d') + 1];
 const batch = process.argv.find(arg => arg.startsWith('--batch='));
+// Device probes (-L / -A / -n) have no --batch: succeed with no output (no options reported).
+if (!batch) process.exit(0);
 const pagePath = n => path.resolve(batch.slice('--batch='.length).replace('%04d', String(n).padStart(4, '0')));
 
 function completePage(n) {
@@ -43,5 +45,5 @@ if (mode === 'wait' || mode === 'stubborn') {
 } else if (mode === 'success') {
   completePage(1);
 }
-// Signal that a scan is under way. Device probes (-A / -n) have no --batch and write nothing.
-if (batch) fs.writeFileSync('scanner-started', String(process.pid));
+// Signal that a scan is under way.
+fs.writeFileSync('scanner-started', String(process.pid));

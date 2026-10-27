@@ -81,7 +81,11 @@ Notes on `source` and `duplex`:
 - If the user doesn’t care about feeder vs. flatbed, allow auto-selection. If they explicitly say “flatbed”, set `source: "Flatbed"`.
 
 ## What A Normal Outcome Looks Like
-After `start_scan_job`, you receive `{ job_id, run_dir, state }`.
+After `start_scan_job`, you receive `{ job_id, run_dir, state }` (a call blocks until the job finishes).
+- A failed scan comes back as an error result (`isError: true`) with the same body plus an `error` reason, so `job_id` and `run_dir` are still there for `get_events`. A `cancelled` job is not an error.
+- If `device_id` is given but the device cannot be probed, or the device list cannot be read, `start_scan_job` fails with an error result and no job is created. The server never scans on a different device than the one requested.
+- `list_devices` and `get_device_options` return error results (not empty results) when `scanimage` fails or is missing; an empty `devices` list really means no scanners were found.
+- `cancel_job` returns an error result when it returns `{ ok: false, error }`.
 - Poll `get_job_status { job_id }` until `state` is `completed`.
 - In `run_dir`, you should see:
   - `manifest.json`: job metadata, params, page and document listings.
@@ -89,7 +93,7 @@ After `start_scan_job`, you receive `{ job_id, run_dir, state }`.
   - `page_0001.tiff`, `page_0002.tiff`, …: raw captured pages.
   - `doc_0001.tiff` (and/or assembled outputs when configured): multipage artifacts.
 - A typical events sequence includes:
-  - `job_started` → `scanner_exec` → (optional `scanner_failed` on retries) → (optional `carrier_sheet_detected` / `carrier_sheet_cropped` per page, or `carrier_detection_skipped` if ImageMagick is unavailable) → `job_completed`.
+  - `job_started` → `scanner_exec` → (`scanner_failed` if scanimage exits non-zero, then `job_error`) → (optional `carrier_sheet_detected` / `carrier_sheet_cropped` per page, or `carrier_detection_skipped` if ImageMagick is unavailable) → `job_completed`.
 
 ## Troubleshooting Flow (When Something Goes Wrong)
 1) Inspect manifest and events:
@@ -99,7 +103,7 @@ After `start_scan_job`, you receive `{ job_id, run_dir, state }`.
    - The server writes `scanner.err.log` and `scanner.out.log` into the `run_dir`.
    - On failure, the server logs tails of both files and includes exit code/signal and command.
 3) Common issues and responses:
-   - “No devices found”: Run `list_devices`. Ensure system SANE is installed and the device is powered/connected. Use a specific `device_id` if necessary.
+   - “No devices found”: Run `list_devices` (an error result there means `scanimage` itself failed; read its message). Ensure system SANE is installed and the device is powered/connected. Use a specific `device_id` if necessary.
    - “Unsupported resolution/mode”: Use `get_device_options` and re-issue `start_scan_job` with supported values. The server also auto-normalizes when possible.
    - “Feeder jam or empty”: Switch `source` to `Flatbed` or reload the ADF; retry. Ask the user to check the feeder.
    - “Permission denied on device or tmp dir”: Verify OS permissions and `INBOX_DIR` location; set `tmp_dir` if needed.

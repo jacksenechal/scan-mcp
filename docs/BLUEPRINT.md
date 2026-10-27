@@ -26,7 +26,7 @@ This document outlines the architecture and goals of the scan-mcp server.
 - `scan://jobs/<job_id>/manifest` — manifest JSON describing documents and pages
 
 ## Implementation notes
-- Capture runs a single `scanimage --batch` command (`planScanCommands` in `src/services/jobs.ts`).
+- Capture runs a single `scanimage --batch` command (`planScanCommand` in `src/services/backends/sane.ts`).
 - Multipage TIFFs are assembled with `tiffcp`. ImageMagick `convert` is used for carrier-sheet detection and cropping, not for assembly.
 - Document breaks: `page_count` splits a batch every N pages. Other break types are on the roadmap (`docs/ROADMAP.md`).
 - Manifest structure defined in `schemas/manifest.schema.json`.

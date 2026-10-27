@@ -9,7 +9,8 @@ import type { Logger } from "pino";
 
 // Real-path (non-mock) job where the scanner works but tiffcp fails.
 vi.mock("execa", () => ({
-  execa: vi.fn(async (bin: string, _args: string[], opts?: { cwd?: string }) => {
+  execa: vi.fn(async (bin: string, args: string[], opts?: { cwd?: string }) => {
+    if (bin === "scanimage" && args[0] === "-A") return { stdout: "", stderr: "" };
     if (bin === "scanimage") {
       for (const i of [1, 2]) {
         await fs.writeFile(path.join(opts!.cwd!, `page_${String(i).padStart(4, "0")}.tiff`), `PAGE_${i}`);

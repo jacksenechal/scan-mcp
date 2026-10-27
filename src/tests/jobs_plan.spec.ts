@@ -1,4 +1,4 @@
-import { planScanCommands } from "../services/backends/sane.js";
+import { planScanCommand } from "../services/backends/sane.js";
 import { MockBackend } from "../services/backends/mock.js";
 import { describe, it, expect, vi } from "vitest";
 import path from "path";
@@ -25,22 +25,20 @@ describe("command planning", () => {
   const runDir = path.resolve("/tmp/dummy-run");
 
   it("uses scanimage for ADF sources", () => {
-    const cmds = planScanCommands({ source: "ADF Duplex", device_id: "dev" }, runDir, ctx);
-    expect(cmds).toHaveLength(1);
-    expect(cmds[0].bin).toContain("scanimage");
-    expect(cmds[0].args.join(" ")).toContain("--batch=");
+    const cmd = planScanCommand({ source: "ADF Duplex", device_id: "dev" }, runDir, ctx);
+    expect(cmd.bin).toContain("scanimage");
+    expect(cmd.args.join(" ")).toContain("--batch=");
   });
 
   it("uses scanimage for flatbed", () => {
-    const cmds = planScanCommands({ source: "Flatbed", device_id: "dev" }, runDir, ctx);
-    expect(cmds).toHaveLength(1);
-    expect(cmds[0].bin).toContain("scanimage");
+    const cmd = planScanCommand({ source: "Flatbed", device_id: "dev" }, runDir, ctx);
+    expect(cmd.bin).toContain("scanimage");
   });
 
   it("adds -x/-y for standard page sizes", () => {
-    const letter = planScanCommands({ device_id: "dev", page_size: "Letter" }, runDir, ctx)[0].args.join(" ");
+    const letter = planScanCommand({ device_id: "dev", page_size: "Letter" }, runDir, ctx).args.join(" ");
     expect(letter).toMatch(/-x 215\.9mm -y 279\.4mm/);
-    const a4 = planScanCommands({ device_id: "dev", page_size: "A4" }, runDir, ctx)[0].args.join(" ");
+    const a4 = planScanCommand({ device_id: "dev", page_size: "A4" }, runDir, ctx).args.join(" ");
     expect(a4).toMatch(/-x 210mm -y 297mm/);
   });
 });

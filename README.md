@@ -98,15 +98,18 @@ scan-mcp --http
 
 - **list_devices**
   - Discover connected scanners with backend details.
+  - Returns an error result (`isError: true`) if `scanimage` fails or is missing; an empty list means no scanners were found.
   - Inputs: none.
 
 - **get_device_options**
-  - Get SANE options for a specific device.
+  - Get SANE options for a specific device. Returns an error result if the device cannot be probed.
   - Inputs:
     - `device_id` (string): Target device identifier.
 
 - **start_scan_job**
   - Begin a scanning job; omitting `device_id` triggers auto-selection and default options.
+  - Returns `{ job_id, run_dir, state }`. If the job ends in `error`, the result has `isError: true` and the same body plus an `error` reason. A `cancelled` job is not an error.
+  - Fails with an error result, and creates no job, if the device list cannot be read (auto-selection) or an explicit `device_id` cannot be probed. It never falls back to a different device.
   - Inputs (all optional unless noted):
     - `device_id` (string)
     - `resolution_dpi` (integer, 50–1200)
@@ -131,7 +134,7 @@ scan-mcp --http
 
 - **cancel_job**
   - Cancel a running job. The scanner process is terminated (SIGTERM, then SIGKILL if it ignores it) and the job ends as `cancelled`. Pages already completed are kept on disk and listed in the manifest, as they are for a job that ends in `error`.
-  - Returns `{ ok: true }` once the cancel is accepted (`get_job_status` may show `running` briefly, until the scanner process exits); repeating it on a cancelled job is harmless. Returns `{ ok: false, error }` if the job has already `completed` or ended in `error`, or does not exist.
+  - Returns `{ ok: true }` once the cancel is accepted (`get_job_status` may show `running` briefly, until the scanner process exits); repeating it on a cancelled job is harmless. Returns `{ ok: false, error }` (as an error result, `isError: true`) if the job has already `completed` or ended in `error`, or does not exist.
   - Inputs:
     - `job_id` (string)
 

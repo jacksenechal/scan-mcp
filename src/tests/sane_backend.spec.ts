@@ -46,6 +46,14 @@ describe("SaneBackend", () => {
     await expect(fs.access(out)).rejects.toThrow();
   });
 
+  it("listDevices and getDeviceOptions throw when scanimage fails instead of looking empty", async () => {
+    const ctx = makeCtx({ SCANIMAGE_BIN: "false" });
+    await expect(ctx.backend.listDevices(ctx)).rejects.toThrow(/Failed to list devices.*false/);
+    await expect(ctx.backend.getDeviceOptions("dev:1", ctx)).rejects.toThrow(/Failed to get options for device dev:1.*false/);
+    const missing = makeCtx({ SCANIMAGE_BIN: path.join(dir, "no-such-scanimage") });
+    await expect(missing.backend.listDevices(missing)).rejects.toThrow(/Failed to list devices.*no-such-scanimage/);
+  });
+
   it("reports scanner_failed and ran=false when scanimage fails", async () => {
     const ctx = makeCtx({ SCANIMAGE_BIN: "false" });
     const events: BackendEvent[] = [];

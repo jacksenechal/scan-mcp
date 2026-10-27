@@ -54,6 +54,7 @@ User request → Analyze intent:
 ## Quick Troubleshooting
 
 **If scan fails:**
+0. A failed `start_scan_job` is an error result (`isError: true`); its body still has `job_id`, `run_dir` and an `error` reason. No `job_id` means no job was created.
 1. `get_manifest({ job_id })` — check state and parameters
 2. `get_events({ job_id })` — find error details in `scanner_failed` events
 3. Common fixes:
