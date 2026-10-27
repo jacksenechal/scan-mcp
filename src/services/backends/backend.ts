@@ -4,7 +4,6 @@ export type Device = {
   id: string;
   vendor?: string;
   model?: string;
-  saneName?: string;
   capabilities?: {
     adf?: boolean;
     duplex?: boolean;

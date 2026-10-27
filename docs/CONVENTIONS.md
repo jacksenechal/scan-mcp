@@ -17,6 +17,7 @@ This package uses a minimal Node.js + TypeScript stack. Key conventions:
 - `src/services/` handle system integration (e.g., SANE, TIFF assembly).
 - `schemas/` contains JSON Schemas for tool contracts.
 - `src/tests/` houses unit and integration tests.
+- Test files are named `*.spec.ts` (not `*.test.ts`).
 
 ## Determinism and typed contracts
 - Define JSON Schemas for all tool inputs and outputs.

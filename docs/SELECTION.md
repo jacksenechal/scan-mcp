@@ -6,26 +6,30 @@ every option in a `start_scan_job` request.
 ## Core Defaults
 
 - Resolution: target 300 dpi (probed first; falls back to nearest available).
-- Color mode: Lineart → Gray → Halftone → Color (first available in that order).
-- Source: prefer feeder; otherwise Flatbed if no better inference is possible.
+- Color mode: Lineart → Gray → Halftone → Color (first available in that order); at >= 600 dpi the
+  order flips to Color → Gray → Halftone → Lineart.
+- Source: ADF Duplex, then ADF, then the first advertised source when the device's options are probed;
+  Flatbed only when no sources are probed (see "Source Choice").
 - Page size: no explicit `-x/-y` unless `page_size` or `custom_size_mm` is provided.
 - Output: batched TIFF pages (`--batch=page_%04d.tiff --format=tiff`).
 
 ## Device Selection
 
-If you do not pass `device_id`, `selectDevice` ranks candidates:
+If you do not pass `device_id`, `selectDevice` scores each candidate. Scores are additive:
 
-- Excludes: backends in `SCAN_EXCLUDE_BACKENDS` (default excludes camera backends like `v4l`).
-- Feeder preference: devices with ADF get a boost; duplex-capable get extra points.
-- Resolution match: small bump if the device supports the desired resolution.
-- Duplex capability: extra points for devices with an ADF Duplex source.
-- Backend preference: small bump for entries listed in `SCAN_PREFER_BACKENDS`.
-- Last used: light bump if it matches the saved device ID (when persistence enabled).
-- Tie-break: score descending, then `deviceId` lexicographically.
+- Excluded: backends in `SCAN_EXCLUDE_BACKENDS` (default `v4l`) score -Infinity and are never chosen.
+- Requested source contains "ADF": ADF Duplex +120, ADF +100, neither -50.
+- Otherwise (no ADF preference): ADF Duplex +40, ADF +30.
+- Resolution match: +10 if the device lists the desired resolution (only when `resolution_dpi` was given).
+- Duplex capable (has an ADF Duplex source): +10.
+- Backend preference: +5 for backends listed in `SCAN_PREFER_BACKENDS`.
+- Camera penalty: -100 for `v4l` devices (applies only if `v4l` is removed from the exclude list).
+- Last used: +1 if it matches the saved device ID (when `PERSIST_LAST_USED_DEVICE` is enabled).
+- Tie-break: score descending, then device ID lexicographically.
 
 A device whose options cannot be probed is skipped. If every candidate fails to probe, or the device list itself cannot be read, `start_scan_job` fails with that error. An explicit `device_id` is never replaced by a different device: if it cannot be probed, the call fails before any job is created.
 
-If no viable devices remain (e.g., only excluded backends), the system’s default may be used.
+If no device is eligible (empty device list, or only excluded backends), no `device_id` is set and the scanner default is used.
 
 ## Resolution Choice
 
@@ -40,14 +44,25 @@ If no viable devices remain (e.g., only excluded backends), the system’s defau
 ## Color Mode Choice
 
 - If provided: normalized (case-insensitively) to the device’s available modes.
-- If omitted: use preference order Lineart → Gray → Halftone → Color; otherwise first available.
+- If omitted: first available in the preference order Lineart → Gray → Halftone → Color (at >= 600 dpi,
+  Color → Gray → Halftone → Lineart); otherwise the first advertised mode. The dpi used is the effective one.
+- An explicit mode with no case-insensitive match is passed through unchanged.
 
-## ADF/Flatbed/Duplex Logic
+## Source Choice
 
-- If `duplex: true` and device offers “ADF Duplex”: pick “ADF Duplex”.
-- If `source` not set but device reports sources:
-  - Prefer “ADF Duplex”, else “ADF”, else the first reported option.
-- If no source can be inferred: default to “Flatbed”.
+Applied to the chosen device once its options have been probed and it advertises at least one source:
+
+- `duplex: true` requests "ADF Duplex", overriding any `source` also passed.
+- Otherwise an explicit `source` is the request.
+- A request is mapped to the device's own source names (`resolveSourceForDevice`):
+  - Exact match with an advertised source wins.
+  - "ADF": "ADF Front", else an advertised source containing "ADF" and not "Duplex", else any containing "ADF".
+  - "ADF Duplex": any source containing "Duplex".
+  - "Flatbed": any source containing "Flatbed".
+  - Anything else: any source containing the requested string.
+  - No match is an error listing the supported sources; it never silently falls back to another source.
+- With no request: "ADF Duplex" if advertised, else "ADF", else the first advertised source.
+- "Flatbed" is only the default when no sources are probed (no device selected, or the device advertises none).
 
 ## Practical Summary
 
