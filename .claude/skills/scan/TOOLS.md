@@ -33,6 +33,8 @@ Enumerate connected scanners and basic capabilities.
 ]
 ```
 
+**Errors**: If `scanimage` fails or is missing, this is an error result (`isError: true`) with the reason, not an empty list. An empty list means no scanners were found.
+
 **When to use**: Only when user explicitly asks for available scanners or specifies a particular scanner.
 
 ---
@@ -53,6 +55,8 @@ Get detailed options (sources, resolutions, modes) for a specific device.
   "colorModes": ["Lineart", "Gray", "Color"]
 }
 ```
+
+**Errors**: An error result (`isError: true`) if the device cannot be probed.
 
 **When to use**: For troubleshooting or when user asks about scanner capabilities.
 
@@ -81,6 +85,10 @@ Begin a scanning job. **Omitting parameters triggers auto-selection and defaults
   "state": "running"
 }
 ```
+
+**Errors**:
+- A scan that ends in `state: "error"` returns `isError: true` with the same body plus an `error` reason; `job_id` and `run_dir` are still present, so inspect with `get_events`. `cancelled` is not an error.
+- If the device list cannot be read, or an explicit `device_id` cannot be probed, the call fails with an error result and no job is created. It never silently scans on a different device.
 
 **Default behavior** (when called with `{}`):
 - Resolution: 300 dpi (probed and normalized)

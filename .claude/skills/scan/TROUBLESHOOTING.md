@@ -60,13 +60,13 @@ See [Retry Strategies](#retry-strategies) for transient failures.
 
 ### "No devices found"
 
-**Symptoms**: `list_devices` returns empty array or `start_scan_job` fails with device error.
+**Symptoms**: `list_devices` returns an empty list (no scanners found), or `list_devices`, `get_device_options` or `start_scan_job` returns an error result naming the failure (e.g. `scanimage` missing or crashed; read the message). A `start_scan_job` error result with no `job_id` means no job was created; a `state: "error"` result with a `job_id` means the scan ran and failed (see `get_events`).
 
 **Solutions**:
 1. Ask user to verify scanner is powered on and connected (USB/network)
 2. Check if SANE is installed: User should verify with `scanimage -L`
 3. Verify USB permissions (user may need to be in `scanner` or `lp` group)
-4. Try specifying a device explicitly if auto-selection fails
+4. Try specifying a device explicitly if auto-selection fails (an explicit device that cannot be probed fails; it does not fall back to another device)
 
 ---
 
