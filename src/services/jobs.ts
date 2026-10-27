@@ -10,7 +10,7 @@ import type { StartScanInput } from "./backends/backend.js";
 export type { StartScanInput } from "./backends/backend.js";
 import { detectCarrierSheet, cropCarrierSheet } from "./carrier.js";
 
-import { errorSummary, resolveJobPath, isExecaError, isNodeError, writeFileAtomic } from "./utils.js";
+import { errorSummary, resolveJobBaseDir, assertInsideInbox, resolveJobPath, isExecaError, isNodeError, writeFileAtomic } from "./utils.js";
 
 // A job stays here until its terminal state is persisted, so a late cancel_job can see
 // the committed outcome instead of racing a stale "running" manifest.
@@ -42,11 +42,13 @@ type Manifest = {
 };
 
 async function initializeJob(input: StartScanInput, ctx: AppContext): Promise<{ runDir: string; manifest: Manifest; eventsPath: string }> {
+  // Validate tmp_dir first so a bad one fails before any device probing or mkdir.
+  const baseDir = await resolveJobBaseDir(input.tmp_dir, ctx.config.INBOX_DIR);
   const effective = await resolveEffectiveInput(input, ctx);
   const id = `job-${uuidv4()}`;
-  const baseDir = effective.tmp_dir ? path.resolve(effective.tmp_dir) : path.resolve(ctx.config.INBOX_DIR);
   const runDir = path.join(baseDir, id);
   await fs.mkdir(runDir, { recursive: true });
+  await assertInsideInbox(runDir, ctx.config.INBOX_DIR);
 
   const eventsPath = path.join(runDir, "events.jsonl");
   const now = new Date().toISOString();
