@@ -103,6 +103,8 @@ export class SaneBackend implements Backend {
         // A user cancel is not a scanner failure; don't record it as one.
         logger.debug({ cmd, runDir }, "scanner command cancelled");
       } else {
+        // Flush the log files first: the tails below must include the scanner's last lines.
+        await Promise.all([endStream(outStream), endStream(errStream)]);
         const stderrTail = await tailTextFile(errPath, 120);
         const stdoutTail = await tailTextFile(outPath, 60);
 
@@ -135,14 +137,22 @@ export class SaneBackend implements Backend {
         logger.error(errorInfo, "scanner command failed");
       }
     } finally {
-      try { outStream?.end(); } catch {}
-      try { errStream?.end(); } catch {}
+      await Promise.all([endStream(outStream), endStream(errStream)]);
     }
     // scanimage --batch renames each page into place when it is complete and removes the
     // in-progress file on cancel, so whatever matches here is finished, even after a failure.
     await reportCompletedPages(runDir, onEvent);
     return { ran };
   }
+}
+
+// Ends a log stream and resolves once its data is on disk (or the stream has failed). Safe to call twice.
+function endStream(stream: WriteStream | undefined): Promise<void> {
+  if (!stream || stream.closed) return Promise.resolve();
+  return new Promise((resolve) => {
+    stream.once("close", resolve);
+    stream.end();
+  });
 }
 
 async function reportCompletedPages(runDir: string, onEvent: RunScanArgs["onEvent"]): Promise<void> {
