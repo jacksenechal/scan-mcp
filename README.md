@@ -57,10 +57,11 @@ scan-mcp --http
 ```
 
 - Default port is `3001`; set `MCP_HTTP_PORT` to override (for example `MCP_HTTP_PORT=3333 scan-mcp --http`).
-- Binds `127.0.0.1` by default. Set `MCP_HTTP_HOST` to expose it on other interfaces (for example `MCP_HTTP_HOST=::` for all, or a LAN address); the server has no authentication, so only do that on a trusted network.
+- Binds `127.0.0.1` by default. Set `MCP_HTTP_HOST` to expose it on other interfaces (for example `MCP_HTTP_HOST=::` for all, or a LAN address). Any non-loopback bind requires `MCP_HTTP_TOKEN`; the server refuses to start without it.
+- Authentication: when `MCP_HTTP_TOKEN` is set, every `/mcp` request must send `Authorization: Bearer <token>` (otherwise `401`). Keep the token secret; it is never logged.
+- DNS rebinding protection (a hostile web page re-pointing its own DNS name at your machine) is always on: requests whose `Host` header is not allowed get `403`, and so do requests with a disallowed `Origin`. Allowed names are `localhost`, `127.0.0.1` and `[::1]` when bound to loopback, plus anything in `MCP_HTTP_ALLOWED_HOSTS`. Behind a reverse proxy or tunnel that forwards a public `Host`, add that hostname there (for example `MCP_HTTP_ALLOWED_HOSTS=scan.example.com`).
 - HTTP responses use server-sent events (SSE) for streaming tool output; clients such as Claude Desktop and Windsurf support
   this transport.
-- There is currently no authentication; widen the bind address only on a trusted internal network.
 
 ## Install
 
@@ -89,8 +90,10 @@ scan-mcp --http
 - `SCAN_PREFER_BACKENDS` (CSV): preferred backends (e.g., `epjitsu,epson2`).
 - `PERSIST_LAST_USED_DEVICE` (default: `true`): persist and lightly prefer last used device.
 - `LOG_LEVEL` (default: `info`): pino log level.
-- `MCP_HTTP_PORT` (default: `3001`): TCP port for the HTTP transport.
-- `MCP_HTTP_HOST` (default: `127.0.0.1`): bind address for the HTTP transport.
+- `MCP_HTTP_PORT` (default: `3001`): TCP port (1-65535) for the HTTP transport.
+- `MCP_HTTP_HOST` (default: `127.0.0.1`): bind address for the HTTP transport. Non-loopback values require `MCP_HTTP_TOKEN`.
+- `MCP_HTTP_TOKEN` (optional): bearer token required on `/mcp` requests; mandatory for non-loopback binds.
+- `MCP_HTTP_ALLOWED_HOSTS` (CSV, optional): extra hostnames accepted in the `Host` and `Origin` headers (reverse proxy or tunnel names).
 
 ## API
 

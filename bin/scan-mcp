@@ -105,6 +105,9 @@ Environment:
   SCAN_PREFER_BACKENDS     CSV backends to prefer (e.g., epjitsu,epson2)
   PERSIST_LAST_USED_DEVICE Persist and prefer last used device (default: true)
   MCP_HTTP_PORT            TCP port when using --http (default: 3001)
+  MCP_HTTP_HOST            Bind address when using --http (default: 127.0.0.1)
+  MCP_HTTP_TOKEN           Bearer token required on /mcp; mandatory when MCP_HTTP_HOST is not loopback
+  MCP_HTTP_ALLOWED_HOSTS   CSV extra Host/Origin hostnames allowed (DNS rebinding protection; for proxies/tunnels)
 
 Examples:
   # Run locally over stdio (default)

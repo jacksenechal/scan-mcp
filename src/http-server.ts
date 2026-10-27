@@ -1,4 +1,6 @@
-import express, { type Request, type Response } from "express";
+import express, { type NextFunction, type Request, type RequestHandler, type Response } from "express";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { hostHeaderValidation } from "@modelcontextprotocol/sdk/server/middleware/hostHeaderValidation.js";
 import { fileURLToPath } from "url";
 import path from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -6,7 +8,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { IncomingMessage, ServerResponse, Server as HttpServer } from "node:http";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createLogger, maskAuthHeaders } from "./server/logger.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, loadHttpConfig } from "./config.js";
 import { registerScanServer } from "./server/register.js";
 import { selectBackend } from "./services/backends/index.js";
 import type { AppContext } from "./context.js";
@@ -14,11 +16,86 @@ import pkg from "../package.json" with { type: "json" };
 
 const version = pkg.version as string;
 
+const LOOPBACK_HOSTNAMES = ["localhost", "127.0.0.1", "[::1]"];
+
+/** True for localhost, 127.0.0.0/8 and ::1 (the only binds allowed without a token). */
+export function isLoopbackHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  return h === "localhost" || h === "::1" || /^127(\.\d{1,3}){3}$/.test(h);
+}
+
+/** Normalize a host entry to the form `URL.hostname` yields (port stripped, IPv6 bracketed). */
+function normalizeHostname(entry: string): string {
+  try {
+    return new URL(`http://${entry}`).hostname.toLowerCase();
+  } catch {
+    return entry.toLowerCase();
+  }
+}
+
+function deny(res: Response, status: number, message: string): void {
+  res.status(status).json({ jsonrpc: "2.0", error: { code: -32000, message }, id: null });
+}
+
+/** Reject requests whose Origin host is not allowed (absent Origin, i.e. non-browser clients, passes). */
+function originValidation(allowedHostnames: string[]): RequestHandler {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const origin = req.headers.origin;
+    if (origin === undefined) return next();
+    let hostname: string;
+    try {
+      hostname = new URL(origin).hostname.toLowerCase();
+    } catch {
+      return deny(res, 403, "Invalid Origin");
+    }
+    if (!allowedHostnames.includes(hostname)) return deny(res, 403, `Invalid Origin: ${hostname}`);
+    next();
+  };
+}
+
+function sha256(s: string): Buffer {
+  return createHash("sha256").update(s).digest();
+}
+
+/** Require `Authorization: Bearer <token>`; compares fixed-length digests in constant time. */
+function bearerAuth(token: string): RequestHandler {
+  const expected = sha256(token);
+  return (req: Request, res: Response, next: NextFunction) => {
+    const m = /^Bearer (.+)$/i.exec(req.headers.authorization ?? "");
+    if (!m || !timingSafeEqual(sha256(m[1]), expected)) {
+      res.setHeader("WWW-Authenticate", "Bearer");
+      return deny(res, 401, "Unauthorized");
+    }
+    next();
+  };
+}
+
 export function startHttpServer(opts: { enableStreamable?: boolean } = {}): HttpServer {
   const config = loadConfig();
   const logger = createLogger("http", config.LOG_LEVEL);
   const ctx: AppContext = { config, logger, backend: selectBackend(config) };
+  const http = loadHttpConfig();
+  const host = http.MCP_HTTP_HOST;
+  const port = http.MCP_HTTP_PORT;
+  const loopback = isLoopbackHost(host);
+  if (!loopback && !http.MCP_HTTP_TOKEN) {
+    throw new Error(
+      `Refusing to start: MCP_HTTP_HOST=${host} is not a loopback address, so MCP_HTTP_TOKEN must be set ` +
+        "(clients then send 'Authorization: Bearer <token>')."
+    );
+  }
+  // Loopback names are trusted only when actually bound to loopback; proxies/tunnels add theirs explicitly.
+  const allowedHostnames = [
+    ...(loopback ? LOOPBACK_HOSTNAMES : [normalizeHostname(host)]),
+    ...http.MCP_HTTP_ALLOWED_HOSTS.map(normalizeHostname),
+  ];
+
   const app = express();
+  app.disable("x-powered-by");
+  // DNS rebinding protection (a hostile page re-pointing its DNS name at this server): always on.
+  app.use(hostHeaderValidation(allowedHostnames));
+  app.use(originValidation(allowedHostnames));
+  if (http.MCP_HTTP_TOKEN) app.use("/mcp", bearerAuth(http.MCP_HTTP_TOKEN));
   app.use(express.json({ limit: "4mb" }));
 
   // Debug incoming requests (headers masked)
@@ -80,10 +157,8 @@ export function startHttpServer(opts: { enableStreamable?: boolean } = {}): Http
     });
   }
 
-  const port = Number(process.env.MCP_HTTP_PORT || 3001);
-  const host = process.env.MCP_HTTP_HOST || "127.0.0.1";
   const server = app.listen(port, host, () => {
-    logger.info({ port, host, enableStreamable }, "scan-mcp HTTP server ready");
+    logger.info({ port, host, enableStreamable, auth: Boolean(http.MCP_HTTP_TOKEN) }, "scan-mcp HTTP server ready");
   });
   return server;
 }
