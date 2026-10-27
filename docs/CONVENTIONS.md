@@ -49,4 +49,8 @@ This package uses a minimal Node.js + TypeScript stack. Key conventions:
   an acknowledged cancel must not become a completion, and a completed or failed job rejects cancel.
 - Backends report each finished page with `page_scanned`; the manifest's pages come only from
   those events and stay whatever the job's outcome. Never report an in-progress scratch file.
+- Concurrency: at most one running job per resolved device (`deviceLocks` in `jobs.ts`), acquired
+  synchronously before the job dir exists and released in a `finally`. The request's abort signal and
+  `abortAllJobs()` (process shutdown) feed the job's own `AbortController`, so every cancellation
+  path ends in the same `cancelled` state.
 - Cancellation tests should block on explicit gates (not sleeps) and exercise real child-process termination.

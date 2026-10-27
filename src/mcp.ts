@@ -5,6 +5,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { loadConfig } from "./config.js";
 import { registerScanServer } from "./server/register.js";
+import { installShutdown } from "./server/shutdown.js";
 import { selectBackend } from "./services/backends/index.js";
 import type { AppContext } from "./context.js";
 import pkg from "../package.json" with { type: "json" };
@@ -34,6 +35,12 @@ export async function main() {
   // Connect via stdio
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // Stop scanners when the server goes away. The SDK's stdio transport does not notice stdin
+  // ending (the client exited or closed the pipe), so watch it here.
+  const shutdown = installShutdown(() => server.close(), logger);
+  process.stdin.once("end", () => void shutdown("stdin closed"));
+  server.server.onclose = () => void shutdown("transport closed");
 
   // stdio mode only in this entrypoint; HTTP/SSE served by src/http-server.ts
 }

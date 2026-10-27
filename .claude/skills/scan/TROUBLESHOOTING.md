@@ -168,7 +168,7 @@ See [Retry Strategies](#retry-strategies) for transient failures.
 
 ### Transient Failures
 
-If failure looks transient (paper jam, timeout, device busy):
+If failure looks transient (paper jam, timeout, device busy). A `device <id> is busy with job <job_id>` error means another job is still running on that device: wait for it or `cancel_job` it first.
 
 **Retry with same parameters**:
 ```javascript

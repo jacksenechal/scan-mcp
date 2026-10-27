@@ -47,6 +47,9 @@ Add a server entry to your MCP client configuration:
 - Call `start_scan_job` without a `device_id` to auto-select a scanner and begin scanning.
 - Artifacts are written under `INBOX_DIR` per job: `job-*/page_*.tiff`, `doc_*.tiff`, `manifest.json`, `events.jsonl`. When `crop_carrier_sheets` is set and a carrier sheet is detected, a `page_*.cropped.tiff` derivative is also written per affected page.
 
+## Shutdown
+On SIGINT or SIGTERM (and, over stdio, when the client closes stdin), the server cancels every running job, waits up to 5 s for the scanner processes to be killed and the manifests to be written (jobs end as `cancelled`), then exits. A second signal exits immediately.
+
 ## Streamable HTTP transport
 
 Prefer to attach the scanner to another machine on your network? `scan-mcp` also supports the
@@ -110,6 +113,8 @@ scan-mcp --http
   - Begin a scanning job; omitting `device_id` triggers auto-selection and default options.
   - Returns `{ job_id, run_dir, state }`. If the job ends in `error`, the result has `isError: true` and the same body plus an `error` reason. A `cancelled` job is not an error.
   - Fails with an error result, and creates no job, if the device list cannot be read (auto-selection) or an explicit `device_id` cannot be probed. It never falls back to a different device.
+  - One scan at a time per device: if the resolved device already has a running job, the call fails with an error result `device <id> is busy with job <job_id>` and creates no job. Auto-selection does not pick another device when the best one is busy. Other devices are unaffected; retry once the running job ends.
+  - Cancelling the request (the client's MCP `notifications/cancelled`) or dropping the connection (HTTP disconnect, stdio client exit) cancels the job like `cancel_job`: the scanner process is terminated and the job ends as `cancelled`.
   - Inputs (all optional unless noted):
     - `device_id` (string)
     - `resolution_dpi` (integer, 50–1200)

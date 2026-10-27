@@ -16,6 +16,41 @@ import { errorSummary, resolveJobBaseDir, assertInsideInbox, resolveJobPath, isE
 // the committed outcome instead of racing a stale "running" manifest.
 const activeJobs = new Map<string, { controller: AbortController; state: Manifest["state"] }>();
 
+// One scan at a time per device (resolved device_id). Module-level, so it is shared by every
+// server instance in the process (the HTTP server builds one per request). Jobs with no
+// resolved device use scanimage's default device and share one sentinel key.
+const DEFAULT_DEVICE_KEY = "\0default-device";
+const deviceLocks = new Map<string, { jobId?: string }>();
+
+export class DeviceBusyError extends Error {
+  constructor(public readonly deviceId: string | null, public readonly busyJobId?: string) {
+    super(`device ${deviceId ?? "(default scanner)"} is busy with job ${busyJobId ?? "(starting)"}`);
+    this.name = "DeviceBusyError";
+  }
+}
+
+// Every startScanJob call from before lock acquisition until it returns, so shutdown can
+// cancel and await all of them, including ones that have not created a job yet.
+const inflight = new Map<AbortController, Promise<unknown>>();
+
+const SHUTDOWN_TIMEOUT_MS = 5000;
+
+/**
+ * Abort every running scan and wait until each has settled into its terminal state (final
+ * manifest written, scanner child killed), or until the bounded timeout elapses.
+ */
+export async function abortAllJobs(timeoutMs = SHUTDOWN_TIMEOUT_MS): Promise<void> {
+  const pending = [...inflight.entries()];
+  for (const [controller] of pending) controller.abort();
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<void>((resolve) => { timer = setTimeout(resolve, timeoutMs); });
+  try {
+    await Promise.race([Promise.allSettled(pending.map(([, done]) => done)), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type StartScanResult = {
   job_id: string;
   run_dir: string;
@@ -41,10 +76,7 @@ type Manifest = {
   state: "running" | "completed" | "cancelled" | "error";
 };
 
-async function initializeJob(input: StartScanInput, ctx: AppContext): Promise<{ runDir: string; manifest: Manifest; eventsPath: string }> {
-  // Validate tmp_dir first so a bad one fails before any device probing or mkdir.
-  const baseDir = await resolveJobBaseDir(input.tmp_dir, ctx.config.INBOX_DIR);
-  const effective = await resolveEffectiveInput(input, ctx);
+async function initializeJob(effective: StartScanInput, baseDir: string, ctx: AppContext): Promise<{ runDir: string; manifest: Manifest; eventsPath: string }> {
   const id = `job-${uuidv4()}`;
   const runDir = path.join(baseDir, id);
   await fs.mkdir(runDir, { recursive: true });
@@ -163,12 +195,49 @@ async function updateManifest(runDir: string, manifest: Manifest) {
   await writeFileAtomic(manifestPath, JSON.stringify(manifest, null, 2));
 }
 
-export async function startScanJob(input: StartScanInput, ctx: AppContext): Promise<StartScanResult> {
-  const { logger, config } = ctx;
-  logger.debug({ input }, "start scan job");
-  const { runDir, manifest, eventsPath } = await initializeJob(input, ctx);
-
+/**
+ * Run a scan job to a terminal state. `requestSignal` (e.g. the MCP request's signal) cancels the
+ * job exactly like cancel_job. Throws DeviceBusyError, creating no job, if the resolved device
+ * already has a running job.
+ */
+export async function startScanJob(input: StartScanInput, ctx: AppContext, requestSignal?: AbortSignal): Promise<StartScanResult> {
+  ctx.logger.debug({ input }, "start scan job");
   const controller = new AbortController();
+  const onRequestAbort = () => controller.abort();
+  if (requestSignal?.aborted) controller.abort();
+  else requestSignal?.addEventListener("abort", onRequestAbort, { once: true });
+  const done = runLockedJob(input, ctx, controller);
+  inflight.set(controller, done);
+  try {
+    return await done;
+  } finally {
+    inflight.delete(controller);
+    requestSignal?.removeEventListener("abort", onRequestAbort);
+  }
+}
+
+async function runLockedJob(input: StartScanInput, ctx: AppContext, controller: AbortController): Promise<StartScanResult> {
+  // Validate tmp_dir first so a bad one fails before any device probing or lock.
+  const baseDir = await resolveJobBaseDir(input.tmp_dir, ctx.config.INBOX_DIR);
+  const effective = await resolveEffectiveInput(input, ctx);
+  // Check and set with no await in between, before any job state is created.
+  const lockKey = effective.device_id ?? DEFAULT_DEVICE_KEY;
+  const held = deviceLocks.get(lockKey);
+  if (held) throw new DeviceBusyError(effective.device_id ?? null, held.jobId);
+  const lock: { jobId?: string } = {};
+  deviceLocks.set(lockKey, lock);
+  try {
+    return await runJob(effective, baseDir, ctx, controller, lock);
+  } finally {
+    deviceLocks.delete(lockKey);
+  }
+}
+
+async function runJob(effective: StartScanInput, baseDir: string, ctx: AppContext, controller: AbortController, lock: { jobId?: string }): Promise<StartScanResult> {
+  const { logger, config } = ctx;
+  const { runDir, manifest, eventsPath } = await initializeJob(effective, baseDir, ctx);
+  lock.jobId = manifest.job_id;
+
   const { signal } = controller;
   const active = { controller, state: manifest.state };
   activeJobs.set(manifest.job_id, active);
