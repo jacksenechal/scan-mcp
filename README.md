@@ -117,7 +117,7 @@ scan-mcp --http
   - Cancelling the request (the client's MCP `notifications/cancelled`) or dropping the connection (HTTP disconnect, stdio client exit) cancels the job like `cancel_job`: the scanner process is terminated and the job ends as `cancelled`.
   - Inputs (all optional unless noted):
     - `device_id` (string)
-    - `resolution_dpi` (integer, 50–1200)
+    - `resolution_dpi` (positive integer; the scanner's nearest supported resolution is used)
     - `color_mode` (`Color` | `Gray` | `Lineart`): color_mode defaults to Lineart (document-first);
       at >= 600dpi it defaults to Color, since high-dpi capture usually means artwork/photos where
       1-bit destroys information. Pass color_mode explicitly to override either default; high dpi
@@ -125,8 +125,8 @@ scan-mcp --http
     - `source` (`Flatbed` | `ADF` | `ADF Duplex`)
     - `duplex` (boolean)
     - `page_size` (`Letter` | `A4` | `Legal` | `Custom`)
-    - `custom_size_mm` { `width`, `height` }
-    - `doc_break_policy` { `type` (`page_count` | `none`), `page_count` }: split the batch into documents of `page_count` pages
+    - `custom_size_mm` { `width`, `height` } (each >= 1)
+    - `doc_break_policy` { `type` (`page_count` | `none`), `page_count` (integer >= 1) }: split the batch into documents of `page_count` pages
     - `output_format` (string, default `tiff`)
     - `tmp_dir` (string): subdirectory of `INBOX_DIR` to place the job in. Relative paths resolve against `INBOX_DIR`; an absolute path must already be inside it. Paths that resolve outside the inbox (`..`, or symlinks pointing out) are rejected, and nothing is created. Pass the same `tmp_dir` to the lookup tools below to reach the job.
     - `crop_carrier_sheets` (boolean, default `false`): detect carrier-sheet leading-edge band and write cropped page derivatives; raw pages are kept

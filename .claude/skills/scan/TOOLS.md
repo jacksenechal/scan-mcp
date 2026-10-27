@@ -68,7 +68,7 @@ Begin a scanning job. **Omitting parameters triggers auto-selection and defaults
 
 **Inputs** (all optional):
 - `device_id` (string): Specific scanner; otherwise auto-select
-- `resolution_dpi` (integer, 50-1200): Target DPI (default: 300)
+- `resolution_dpi` (positive integer): Target DPI (default: 300); the scanner's nearest supported resolution is used
 - `color_mode` (string): `Lineart` | `Gray` | `Halftone` | `Color` (default: Lineart)
 - `source` (string): `Flatbed` | `ADF` | `ADF Duplex` (default: ADF Duplex)
 - `duplex` (boolean): Prefer ADF Duplex if available
@@ -205,7 +205,7 @@ Retrieve a job's `events.jsonl` log.
 ### resolution_dpi
 
 - **Default**: 300 dpi (probed and normalized to nearest available)
-- **Range**: 50-1200
+- **Range**: any positive integer; the scanner's nearest supported resolution is used
 - **Common values**: 150 (draft), 300 (standard), 600 (photos), 1200 (archival)
 
 ### color_mode

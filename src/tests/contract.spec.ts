@@ -91,6 +91,33 @@ describe("tools/list contract", () => {
     expect(props.crop_carrier_sheets.type).toBe("boolean");
   });
 
+  it("start_scan_job publishes numeric bounds", async () => {
+    const props = (await inputSchema("start_scan_job")).properties!;
+    expect(props.resolution_dpi).toMatchObject({ type: "integer", exclusiveMinimum: 0 });
+    expect(props.resolution_dpi).not.toHaveProperty("maximum");
+    const size = props.custom_size_mm.properties!;
+    expect(size.width).toMatchObject({ type: "number", minimum: 1 });
+    expect(size.height).toMatchObject({ type: "number", minimum: 1 });
+    expect(props.doc_break_policy.properties!.page_count).toMatchObject({ type: "integer", minimum: 1 });
+  });
+
+  it.each([
+    ["resolution_dpi of 0", { resolution_dpi: 0 }],
+    ["negative resolution_dpi", { resolution_dpi: -300 }],
+    ["custom_size_mm under 1", { custom_size_mm: { width: 0.5, height: 100 } }],
+    ["page_count of 0", { doc_break_policy: { type: "page_count", page_count: 0 } }],
+  ])("start_scan_job rejects %s", async (_label, args) => {
+    const before = await fs.readdir(inboxDir);
+    const res = await client.callTool({ name: "start_scan_job", arguments: { tmp_dir: inboxDir, ...args } }).catch((e) => ({ isError: true, e }));
+    expect((res as { isError?: boolean }).isError).toBe(true);
+    expect(await fs.readdir(inboxDir)).toEqual(before);
+  });
+
+  it("start_scan_job accepts a large resolution_dpi and leaves it to the device", async () => {
+    const res = await client.callTool({ name: "start_scan_job", arguments: { tmp_dir: inboxDir, resolution_dpi: 4800 } });
+    expect((res as { isError?: boolean }).isError).toBeFalsy();
+  });
+
   it("job tools require job_id and accept an optional tmp_dir", async () => {
     for (const tool of ["get_job_status", "cancel_job", "get_manifest", "get_events"]) {
       const schema = await inputSchema(tool);
