@@ -28,11 +28,11 @@ These defaults are applied after device/capabilities are known. If the user supp
 - `list_devices`: Enumerate connected scanners and basic capabilities.
 - `get_device_options { device_id }`: Detailed options (sources/resolutions/modes).
 - `start_scan_job { ... }`: Start a scan (auto-select device and fill defaults if params omitted).
-- `get_job_status { job_id }`: Poll job state and artifact counts.
-- `cancel_job { job_id }`: Stop a running scan (`ok:false` if the job already completed or failed). Completed pages are kept.
-- `list_jobs { limit?, state? }`: Recent jobs under the inbox directory.
-- `get_manifest { job_id }`: Fetch raw manifest JSON for a job.
-- `get_events { job_id }`: Fetch raw events JSONL for a job.
+- `get_job_status { job_id, tmp_dir? }`: Poll job state and artifact counts.
+- `cancel_job { job_id, tmp_dir? }`: Stop a running scan (`ok:false` if the job already completed or failed). Completed pages are kept.
+- `list_jobs { limit?, state?, tmp_dir? }`: Recent jobs under the inbox directory (or under `tmp_dir`).
+- `get_manifest { job_id, tmp_dir? }`: Fetch raw manifest JSON for a job.
+- `get_events { job_id, tmp_dir? }`: Fetch raw events JSONL for a job. (The `scan://jobs/{job_id}/...` resources only see jobs directly in the inbox; for `tmp_dir` jobs use these tools.)
 
 Inputs for `start_scan_job` (all optional unless specified):
 - `device_id`: Pick a specific scanner; otherwise auto-select.
@@ -45,7 +45,7 @@ Inputs for `start_scan_job` (all optional unless specified):
 - `duplex`: boolean; if `true` and device supports `ADF Duplex`, it is preferred.
 - `page_size`: `Letter` | `A4` | `Legal` | `Custom` (+ `custom_size_mm`).
 - `doc_break_policy`: Advanced per-page splitting config (optional).
-- `tmp_dir`: Override base dir for `run_dir` placement (optional).
+- `tmp_dir`: Subdirectory of `INBOX_DIR` for `run_dir` placement (optional). Relative paths resolve against the inbox; absolute paths must be inside it; escapes (`..`, symlinks out) are rejected. Pass the same `tmp_dir` to `get_job_status`, `cancel_job`, `get_manifest`, `get_events` and `list_jobs` to reach the job.
 - `crop_carrier_sheets`: If `true`, crop pages that show a detected carrier-sheet leading-edge band and assemble documents from the cropped derivatives (optional; default `false`).
 
 ## Carrier Sheets
@@ -106,7 +106,7 @@ After `start_scan_job`, you receive `{ job_id, run_dir, state }` (a call blocks 
    - “No devices found”: Run `list_devices` (an error result there means `scanimage` itself failed; read its message). Ensure system SANE is installed and the device is powered/connected. Use a specific `device_id` if necessary.
    - “Unsupported resolution/mode”: Use `get_device_options` and re-issue `start_scan_job` with supported values. The server also auto-normalizes when possible.
    - “Feeder jam or empty”: Switch `source` to `Flatbed` or reload the ADF; retry. Ask the user to check the feeder.
-   - “Permission denied on device or tmp dir”: Verify OS permissions and `INBOX_DIR` location; set `tmp_dir` if needed.
+   - “Permission denied on device or tmp dir”: Verify OS permissions on the device and on `INBOX_DIR`; `tmp_dir` cannot point outside `INBOX_DIR`, so fix the inbox location (`INBOX_DIR`) instead.
 4) Retry strategy:
    - If failure looks transient (paper jam, timeout), retry `start_scan_job` with the same params. Consider lowering dpi or switching sources.
 

@@ -123,7 +123,7 @@ scan-mcp --http
     - `custom_size_mm` { `width`, `height` }
     - `doc_break_policy` { `type` (`page_count` | `none`), `page_count` }: split the batch into documents of `page_count` pages
     - `output_format` (string, default `tiff`)
-    - `tmp_dir` (string)
+    - `tmp_dir` (string): subdirectory of `INBOX_DIR` to place the job in. Relative paths resolve against `INBOX_DIR`; an absolute path must already be inside it. Paths that resolve outside the inbox (`..`, or symlinks pointing out) are rejected, and nothing is created. Pass the same `tmp_dir` to the lookup tools below to reach the job.
     - `crop_carrier_sheets` (boolean, default `false`): detect carrier-sheet leading-edge band and write cropped page derivatives; raw pages are kept
 
 - **get_job_status**
@@ -131,28 +131,35 @@ scan-mcp --http
   - A job ends as `completed`, `cancelled`, or `error`. A scan that produces no pages is `error`. If TIFF assembly (`tiffcp`) fails, the job is `error` and the raw `page_NNNN.tiff` files are kept; no partial document is substituted.
   - Inputs:
     - `job_id` (string)
+    - `tmp_dir` (string, optional): the `tmp_dir` the job was started with
 
 - **cancel_job**
   - Cancel a running job. The scanner process is terminated (SIGTERM, then SIGKILL if it ignores it) and the job ends as `cancelled`. Pages already completed are kept on disk and listed in the manifest, as they are for a job that ends in `error`.
   - Returns `{ ok: true }` once the cancel is accepted (`get_job_status` may show `running` briefly, until the scanner process exits); repeating it on a cancelled job is harmless. Returns `{ ok: false, error }` (as an error result, `isError: true`) if the job has already `completed` or ended in `error`, or does not exist.
   - Inputs:
     - `job_id` (string)
+    - `tmp_dir` (string, optional): the `tmp_dir` the job was started with
 
 - **list_jobs**
   - List recent jobs from the inbox directory.
   - Inputs (optional):
     - `limit` (integer, max 100)
     - `state` (`running` | `completed` | `cancelled` | `error` | `unknown`)
+    - `tmp_dir` (string): list jobs under this subdirectory of `INBOX_DIR` instead of the inbox itself
 
 - **get_manifest**
   - Fetch a job's `manifest.json`.
   - Inputs:
     - `job_id` (string)
+    - `tmp_dir` (string, optional): the `tmp_dir` the job was started with
 
 - **get_events**
   - Retrieve a job's `events.jsonl` log.
   - Inputs:
     - `job_id` (string)
+    - `tmp_dir` (string, optional): the `tmp_dir` the job was started with
+
+The `scan://jobs/{job_id}/manifest` and `scan://jobs/{job_id}/events` resources only cover jobs directly in `INBOX_DIR`. For jobs started with `tmp_dir`, use the tools above with `tmp_dir`.
 
 See JSON Schemas in `schemas/` for input shapes. Runtime validation is zod (`src/server/register.ts`); the schemas document the contract and tests assert against them.
 

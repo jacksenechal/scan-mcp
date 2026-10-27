@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import type { ExecaError } from "execa";
+import { expandTilde } from "../config.js";
 
 const DEFAULT_BYTE_WINDOW = 64 * 1024; // 64 KiB
 
@@ -35,6 +36,55 @@ export function resolveJobPath(jobId: string, baseDir: string): string {
   const full = path.resolve(base, jobId);
   if (!full.startsWith(base + path.sep)) throw new Error("invalid job_id");
   return full;
+}
+
+function isInside(child: string, parent: string): boolean {
+  return child === parent || child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep);
+}
+
+// realpath of the deepest existing ancestor of `p`, with the not-yet-existing remainder appended.
+// A dangling symlink on the way counts as existing and is rejected: mkdir would follow it.
+async function realpathExisting(p: string): Promise<string> {
+  const rest: string[] = [];
+  let cur = p;
+  for (;;) {
+    try {
+      return path.join(await fs.realpath(cur), ...rest.reverse());
+    } catch (e) {
+      if (!isNodeError(e) || e.code !== "ENOENT") throw e;
+      const exists = await fs.lstat(cur).then(() => true, () => false);
+      if (exists) throw new Error("tmp_dir contains a dangling symlink");
+      const parent = path.dirname(cur);
+      if (parent === cur) throw e;
+      rest.push(path.basename(cur));
+      cur = parent;
+    }
+  }
+}
+
+/**
+ * Validate that `dir` (existing or not) really lives inside the inbox, following symlinks.
+ * Throws otherwise. Call before mkdir, and again after, to close the check/create gap.
+ */
+export async function assertInsideInbox(dir: string, inboxDir: string): Promise<void> {
+  const realInbox = await realpathExisting(path.resolve(inboxDir));
+  const realDir = await realpathExisting(path.resolve(dir));
+  if (!isInside(realDir, realInbox)) throw new Error("tmp_dir must be inside INBOX_DIR (symlink escape)");
+}
+
+/**
+ * Resolve a client-supplied `tmp_dir` to a job base directory that is INBOX_DIR or a descendant.
+ * Relative paths resolve against INBOX_DIR; `~` is expanded. Undefined means INBOX_DIR.
+ * Rejects `..` escapes lexically (before touching the filesystem) and symlink escapes via realpath.
+ * Creates nothing.
+ */
+export async function resolveJobBaseDir(tmpDir: string | undefined, inboxDir: string): Promise<string> {
+  const inbox = path.resolve(inboxDir);
+  if (tmpDir === undefined || tmpDir === "") return inbox;
+  const dir = path.resolve(inbox, expandTilde(tmpDir));
+  if (!isInside(dir, inbox)) throw new Error(`tmp_dir must be inside INBOX_DIR (${inbox}); got ${tmpDir}`);
+  await assertInsideInbox(dir, inbox);
+  return dir;
 }
 
 export function isExecaError(e: unknown): e is ExecaError {

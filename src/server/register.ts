@@ -5,7 +5,7 @@ import { z } from "zod";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppContext } from "../context.js";
 import { startScanJob, getJobStatus, cancelJob, listJobs } from "../services/jobs.js";
-import { resolveJobPath } from "../services/utils.js";
+import { resolveJobBaseDir, resolveJobPath } from "../services/utils.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 // Resources are published at package root under resources/**; do not copy into dist.
@@ -72,12 +72,25 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     }
   );
 
-  const JobIdShape = z.object({ job_id: z.string() });
+  const JobIdShape = z.object({
+    job_id: z.string(),
+    tmp_dir: nullToUndef(
+      z.string().describe("The tmp_dir the job was started with, if any (must be inside INBOX_DIR); omit for jobs in INBOX_DIR itself")
+    ),
+  });
+  const jobRunDir = async (args: unknown) => {
+    const { job_id, tmp_dir } = JobIdShape.parse(args);
+    return resolveJobPath(job_id, await resolveJobBaseDir(tmp_dir, ctx.config.INBOX_DIR));
+  };
   server.tool(
     "get_job_status",
     "Get status and artifact counts for a job",
     JobIdShape.shape,
-    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getJobStatus(JobIdShape.parse(args).job_id, ctx)) }] })
+    async (args) => {
+      const { job_id, tmp_dir } = JobIdShape.parse(args);
+      const base = await resolveJobBaseDir(tmp_dir, ctx.config.INBOX_DIR);
+      return { content: [{ type: "text", text: JSON.stringify(await getJobStatus(job_id, ctx, base)) }] };
+    }
   );
 
   server.tool(
@@ -85,18 +98,20 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     "Cancel a running scan job",
     JobIdShape.shape,
     async (args) => {
-      const result = await cancelJob(JobIdShape.parse(args).job_id, ctx);
+      const { job_id, tmp_dir } = JobIdShape.parse(args);
+      const result = await cancelJob(job_id, ctx, await resolveJobBaseDir(tmp_dir, ctx.config.INBOX_DIR));
       return { content: [{ type: "text", text: JSON.stringify(result) }], ...(result.ok ? {} : { isError: true }) };
     }
   );
 
   const ListJobsInput = z.object({
     limit: nullToUndef(z.number().int().positive().max(100)),
+    tmp_dir: nullToUndef(z.string().describe("List jobs under this directory instead of INBOX_DIR (must be inside INBOX_DIR)")),
     state: nullToUndef(z.enum(["running", "completed", "cancelled", "error", "unknown"]))
   });
   server.tool(
     "list_jobs",
-    "List recent scan jobs from the inbox directory",
+    "List recent scan jobs from the inbox directory (or from tmp_dir inside it)",
     ListJobsInput.shape,
     async (args) => ({ content: [{ type: "text", text: JSON.stringify({ jobs: await listJobs(ctx, ListJobsInput.parse(args)) }) }] })
   );
@@ -107,8 +122,7 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     "Fetch a job manifest JSON by job_id",
     JobIdShape.shape,
     async (args) => {
-      const jobId = z.string().parse(JobIdShape.parse(args).job_id);
-      const runDir = resolveJobPath(jobId, ctx.config.INBOX_DIR);
+      const runDir = await jobRunDir(args);
       const p = path.join(runDir, "manifest.json");
       const txt = await fsSafeRead(p);
       if (txt) return { content: [{ type: "text", text: txt }] };
@@ -121,8 +135,7 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     "Fetch job events JSONL by job_id",
     JobIdShape.shape,
     async (args) => {
-      const jobId = z.string().parse(JobIdShape.parse(args).job_id);
-      const runDir = resolveJobPath(jobId, ctx.config.INBOX_DIR);
+      const runDir = await jobRunDir(args);
       const p = path.join(runDir, "events.jsonl");
       const txt = await fsSafeRead(p);
       if (txt) return { content: [{ type: "text", text: txt }] };
