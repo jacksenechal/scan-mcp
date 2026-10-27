@@ -75,7 +75,7 @@ Begin a scanning job. **Omitting parameters triggers auto-selection and defaults
 - `page_size` (string): `Letter` | `A4` | `Legal` | `Custom`
 - `custom_size_mm` (object): `{ width: number, height: number }`
 - `doc_break_policy` (object): Advanced per-page splitting config
-- `tmp_dir` (string): Override base directory for run_dir
+- `tmp_dir` (string): Subdirectory of `INBOX_DIR` for run_dir. Relative paths resolve against the inbox; absolute paths must be inside it; escapes (`..`, symlinks out) are rejected. Pass the same value to the job lookup tools to reach the job
 
 **Returns**:
 ```json
@@ -104,6 +104,7 @@ Inspect job state and artifact counts.
 
 **Inputs**:
 - `job_id` (string, required): Job identifier
+- `tmp_dir` (string, optional): The `tmp_dir` the job was started with (omit for jobs placed directly in the inbox)
 
 **Returns**:
 ```json
@@ -126,6 +127,7 @@ Request job cancellation (best effort during scan loops).
 
 **Inputs**:
 - `job_id` (string, required): Job identifier
+- `tmp_dir` (string, optional): The `tmp_dir` the job was started with (omit for jobs placed directly in the inbox)
 
 **Returns**:
 ```json
@@ -144,6 +146,7 @@ List recent jobs from the inbox directory.
 **Inputs** (optional):
 - `limit` (integer, max 100): Number of jobs to return
 - `state` (string): Filter by state (`running` | `completed` | `cancelled` | `error` | `unknown`)
+- `tmp_dir` (string): List jobs under this subdirectory of the inbox instead of the inbox itself
 
 **Returns**:
 ```json
@@ -164,6 +167,7 @@ Fetch a job's `manifest.json`.
 
 **Inputs**:
 - `job_id` (string, required): Job identifier
+- `tmp_dir` (string, optional): The `tmp_dir` the job was started with (omit for jobs placed directly in the inbox)
 
 **Returns**: Raw manifest JSON containing:
 - Job metadata (ID, state, timestamps)
@@ -181,6 +185,7 @@ Retrieve a job's `events.jsonl` log.
 
 **Inputs**:
 - `job_id` (string, required): Job identifier
+- `tmp_dir` (string, optional): The `tmp_dir` the job was started with (omit for jobs placed directly in the inbox)
 
 **Returns**: Raw events JSONL with chronological events:
 - `job_started`: Job initialization

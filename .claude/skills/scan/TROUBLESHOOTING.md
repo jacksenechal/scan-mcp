@@ -105,9 +105,10 @@ See [Retry Strategies](#retry-strategies) for transient failures.
 **Solutions**:
 1. User needs permissions to access scanner device
 2. Check `INBOX_DIR` location and permissions
-3. Try setting `tmp_dir` to a location with write access:
+3. `tmp_dir` cannot help here: it must resolve inside `INBOX_DIR` (paths outside it, via `..` or symlinks, are rejected). If the inbox is not writable, change `INBOX_DIR` in the server config instead. To group jobs, use a subdirectory, and pass the same `tmp_dir` to `get_job_status`, `cancel_job`, `get_manifest`, `get_events` and `list_jobs`:
    ```javascript
-   await start_scan_job({ tmp_dir: "/tmp/scans" });
+   await start_scan_job({ tmp_dir: "batch-1" });
+   await get_job_status({ job_id, tmp_dir: "batch-1" });
    ```
 
 ---
