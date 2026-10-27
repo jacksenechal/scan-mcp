@@ -2,14 +2,20 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
+import type { AddressInfo } from "node:net";
 import type { Logger } from "pino";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppContext } from "../context.js";
 import { ConfigSchema } from "../config.js";
 import { MockBackend } from "../services/backends/mock.js";
 import { SaneBackend } from "../services/backends/sane.js";
-import { startScanJob, cancelJob, DeviceBusyError } from "../services/jobs.js";
+import { registerScanServer } from "../server/register.js";
+import { startHttpServer } from "../http-server.js";
+import { startScanJob, cancelJob, getJobStatus, DeviceBusyError } from "../services/jobs.js";
 
-// Per-device locking, driven by the fake scanimage in
+// Concurrency, request cancellation and shutdown, driven by the fake scanimage in
 // fixtures/sane-scanner.mjs. Device "wait" blocks until terminated; "success" completes.
 let dir: string;
 let ctx: AppContext;
@@ -44,6 +50,10 @@ async function scannerRunning(inbox = ctx.config.INBOX_DIR): Promise<{ runDir: s
     found = { runDir, pid: Number(await fs.readFile(path.join(runDir, "scanner-started"), "utf8")) };
   }, { timeout: 5000 });
   return found!;
+}
+
+async function manifestState(runDir: string): Promise<string> {
+  return JSON.parse(await fs.readFile(path.join(runDir, "manifest.json"), "utf8")).state;
 }
 
 describe("per-device lock", () => {
@@ -125,5 +135,62 @@ describe("per-device lock", () => {
     await expect(startScanJob({ device_id: "success" }, ctx)).rejects.toThrow();
     await fs.rm(ctx.config.INBOX_DIR);
     expect((await startScanJob({ device_id: "success" }, ctx)).state).toBe("completed");
+  });
+});
+
+describe("request cancellation", () => {
+  it("cancels the job and kills the scanner when the MCP request is aborted", async () => {
+    const server = new McpServer({ name: "scan-mcp", version: "0" });
+    registerScanServer(server, ctx);
+    const client = new Client({ name: "test", version: "0" });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    try {
+      const abort = new AbortController();
+      const call = client.callTool({ name: "start_scan_job", arguments: { device_id: "wait" } }, undefined, { signal: abort.signal });
+      const rejected = expect(call).rejects.toBeDefined();
+      const { runDir, pid } = await scannerRunning();
+      abort.abort();
+      await rejected;
+      await vi.waitFor(async () => {
+        expect(await manifestState(runDir)).toBe("cancelled");
+        expect(isAlive(pid)).toBe(false);
+      }, { timeout: 5000 });
+      expect(await getJobStatus(path.basename(runDir), ctx)).toMatchObject({ state: "cancelled" });
+      // The device is free again.
+      expect((await startScanJob({ device_id: "wait" }, { ...ctx, backend: new MockBackend() })).state).toBe("completed");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("cancels the job when an HTTP client disconnects", async () => {
+    const env = { MCP_HTTP_PORT: "0", LOG_LEVEL: "silent", SCAN_MOCK: "false", INBOX_DIR: ctx.config.INBOX_DIR, SCANIMAGE_BIN: scannerBin, TIFFCP_BIN: "cp", IM_CONVERT_BIN: "false" };
+    const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+    Object.assign(process.env, env);
+    const server = startHttpServer();
+    try {
+      await new Promise<void>((resolve) => server.on("listening", () => resolve()));
+      const abort = new AbortController();
+      const request = fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`, {
+        method: "POST",
+        signal: abort.signal,
+        headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "start_scan_job", arguments: { device_id: "wait" } } }),
+      }).catch(() => undefined);
+      const { runDir, pid } = await scannerRunning();
+      abort.abort();
+      await request;
+      await vi.waitFor(async () => {
+        expect(await manifestState(runDir)).toBe("cancelled");
+        expect(isAlive(pid)).toBe(false);
+      }, { timeout: 5000 });
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+    }
   });
 });

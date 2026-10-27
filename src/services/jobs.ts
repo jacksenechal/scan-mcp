@@ -174,12 +174,21 @@ async function updateManifest(runDir: string, manifest: Manifest) {
 }
 
 /**
- * Run a scan job to a terminal state. Throws DeviceBusyError, creating no job, if the resolved
- * device already has a running job.
+ * Run a scan job to a terminal state. `requestSignal` (e.g. the MCP request's signal) cancels the
+ * job exactly like cancel_job. Throws DeviceBusyError, creating no job, if the resolved device
+ * already has a running job.
  */
-export async function startScanJob(input: StartScanInput, ctx: AppContext): Promise<StartScanResult> {
+export async function startScanJob(input: StartScanInput, ctx: AppContext, requestSignal?: AbortSignal): Promise<StartScanResult> {
   ctx.logger.debug({ input }, "start scan job");
-  return runLockedJob(input, ctx, new AbortController());
+  const controller = new AbortController();
+  const onRequestAbort = () => controller.abort();
+  if (requestSignal?.aborted) controller.abort();
+  else requestSignal?.addEventListener("abort", onRequestAbort, { once: true });
+  try {
+    return await runLockedJob(input, ctx, controller);
+  } finally {
+    requestSignal?.removeEventListener("abort", onRequestAbort);
+  }
 }
 
 async function runLockedJob(input: StartScanInput, ctx: AppContext, controller: AbortController): Promise<StartScanResult> {

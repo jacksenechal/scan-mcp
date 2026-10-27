@@ -65,8 +65,9 @@ export function registerScanServer(server: McpServer, ctx: AppContext) {
     "start_scan_job",
     "Start a scan job; auto-selects device and fills defaults when omitted",
     StartScanInputShape.shape,
-    async (args) => {
-      const result = await startScanJob(StartScanInputShape.parse(args), ctx);
+    async (args, extra) => {
+      // extra.signal aborts on the client's notifications/cancelled and when the transport closes.
+      const result = await startScanJob(StartScanInputShape.parse(args), ctx, extra.signal);
       // Same body either way so clients still get job_id and run_dir; a failed scan is flagged.
       return { content: [{ type: "text", text: JSON.stringify(result) }], ...(result.state === "error" ? { isError: true } : {}) };
     }
