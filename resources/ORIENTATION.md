@@ -84,6 +84,8 @@ Notes on `source` and `duplex`:
 After `start_scan_job`, you receive `{ job_id, run_dir, state }` (a call blocks until the job finishes).
 - A failed scan comes back as an error result (`isError: true`) with the same body plus an `error` reason, so `job_id` and `run_dir` are still there for `get_events`. A `cancelled` job is not an error.
 - If `device_id` is given but the device cannot be probed, or the device list cannot be read, `start_scan_job` fails with an error result and no job is created. The server never scans on a different device than the one requested.
+- Only one scan runs per device at a time: `start_scan_job` on a busy device fails with an error result `device <id> is busy with job <job_id>` and creates no job (auto-selection does not switch devices). Wait for that job (or `cancel_job` it) and retry; scans on other devices are fine.
+- Cancelling the `start_scan_job` request, or disconnecting mid-scan, cancels the job (same as `cancel_job`). On server shutdown, running jobs are cancelled and end as `cancelled`; their completed pages are kept.
 - `list_devices` and `get_device_options` return error results (not empty results) when `scanimage` fails or is missing; an empty `devices` list really means no scanners were found.
 - `cancel_job` returns an error result when it returns `{ ok: false, error }`.
 - Poll `get_job_status { job_id }` until `state` is `completed`.

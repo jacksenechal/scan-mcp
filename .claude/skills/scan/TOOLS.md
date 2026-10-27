@@ -88,6 +88,8 @@ Begin a scanning job. **Omitting parameters triggers auto-selection and defaults
 
 **Errors**:
 - A scan that ends in `state: "error"` returns `isError: true` with the same body plus an `error` reason; `job_id` and `run_dir` are still present, so inspect with `get_events`. `cancelled` is not an error.
+- If the resolved device already has a running job, the call fails with an error result `device <id> is busy with job <job_id>` and creates no job (one scan per device at a time; auto-selection does not switch devices). Wait for that job or `cancel_job` it, then retry.
+- Cancelling the request or disconnecting mid-scan cancels the job, same as `cancel_job`. Server shutdown also cancels running jobs.
 - If the device list cannot be read, or an explicit `device_id` cannot be probed, the call fails with an error result and no job is created. It never silently scans on a different device.
 
 **Default behavior** (when called with `{}`):
