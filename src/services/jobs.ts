@@ -289,9 +289,9 @@ export type JobInfo = {
 
 export async function listJobs(
   ctx: AppContext,
-  { limit, state }: { limit?: number; state?: string } = {}
+  { limit, state, tmp_dir }: { limit?: number; state?: string; tmp_dir?: string } = {}
 ): Promise<JobInfo[]> {
-  const base = path.resolve(ctx.config.INBOX_DIR);
+  const base = await resolveJobBaseDir(tmp_dir, ctx.config.INBOX_DIR);
   let entries: { name: string; run_dir: string }[] = [];
   try {
     entries = (await fs.readdir(base, { withFileTypes: true }))

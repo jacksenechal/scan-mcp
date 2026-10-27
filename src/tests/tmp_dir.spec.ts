@@ -105,3 +105,59 @@ describe("start_scan_job tmp_dir containment", () => {
   });
 });
 
+describe("job lookups with tmp_dir", () => {
+  it("every lookup tool finds a tmp_dir job when given the same tmp_dir, and not without it", async () => {
+    const started = await call("start_scan_job", { tmp_dir: "batch" });
+    expect(started.isError).toBe(false);
+    const { job_id } = JSON.parse(started.text);
+
+    for (const name of ["get_job_status", "get_manifest", "get_events"]) {
+      expect((await call(name, { job_id, tmp_dir: "batch" })).isError, name).toBe(false);
+    }
+    expect(JSON.parse((await call("get_job_status", { job_id })).text).state).toBe("unknown");
+    expect((await call("get_manifest", { job_id })).isError).toBe(true);
+    expect((await call("get_events", { job_id })).isError).toBe(true);
+    expect(JSON.parse((await call("get_job_status", { job_id, tmp_dir: "batch" })).text)).toMatchObject({ job_id, state: "completed" });
+    expect(JSON.parse((await call("get_manifest", { job_id, tmp_dir: "batch" })).text).job_id).toBe(job_id);
+
+    // A completed job cannot be cancelled, but the lookup must reach it to say so.
+    expect((await call("cancel_job", { job_id, tmp_dir: "batch" })).text).toContain("job is already completed");
+    expect((await call("cancel_job", { job_id })).text).toContain("manifest not found");
+  });
+
+  it("rejects an escaping tmp_dir on every lookup tool", async () => {
+    const job_id = "job-00000000-0000-0000-0000-000000000000";
+    for (const name of ["get_job_status", "cancel_job", "get_manifest", "get_events"]) {
+      const r = await call(name, { job_id, tmp_dir: outside });
+      expect(r.isError, name).toBe(true);
+      expect(r.text, name).toMatch(/inside INBOX_DIR/);
+    }
+    expect((await call("list_jobs", { tmp_dir: "../outside" })).isError).toBe(true);
+  });
+
+  it("list_jobs with tmp_dir lists only jobs there", async () => {
+    const inInbox = await startScanJob({}, ctx);
+    const inSub = await startScanJob({ tmp_dir: "batch" }, ctx);
+    const sub = JSON.parse((await call("list_jobs", { tmp_dir: "batch" })).text).jobs;
+    expect(sub.map((j: { job_id: string }) => j.job_id)).toEqual([inSub.job_id]);
+    const top = JSON.parse((await call("list_jobs", {})).text).jobs;
+    expect(top.map((j: { job_id: string }) => j.job_id)).toEqual([inInbox.job_id]);
+  });
+
+  it("cancel_job with tmp_dir cancels a running tmp_dir job", async () => {
+    let entered!: (jobId: string) => void;
+    const ready = new Promise<string>((resolve) => { entered = resolve; });
+    vi.spyOn(ctx.backend, "runScan").mockImplementationOnce(async ({ runDir, signal }) => {
+      entered(path.basename(runDir));
+      await new Promise<void>((resolve) => signal.addEventListener("abort", () => resolve()));
+      signal.throwIfAborted();
+      return { ran: true };
+    });
+    const pending = call("start_scan_job", { device_id: "test", tmp_dir: "batch" });
+    const job_id = await ready;
+    expect(JSON.parse((await call("get_job_status", { job_id, tmp_dir: "batch" })).text).state).toBe("running");
+    expect(JSON.parse((await call("cancel_job", { job_id, tmp_dir: "batch" })).text)).toEqual({ ok: true });
+    expect(JSON.parse((await pending).text).state).toBe("cancelled");
+    expect(JSON.parse((await call("get_job_status", { job_id, tmp_dir: "batch" })).text).state).toBe("cancelled");
+  });
+});
