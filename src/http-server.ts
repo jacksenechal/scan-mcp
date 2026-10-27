@@ -84,11 +84,20 @@ export function startHttpServer(opts: { enableStreamable?: boolean } = {}): Http
         "(clients then send 'Authorization: Bearer <token>')."
     );
   }
-  // Loopback names are trusted only when actually bound to loopback; proxies/tunnels add theirs explicitly.
+  // Loopback names are trusted when bound to loopback, or when a token is set (the token already defeats
+  // DNS rebinding: a hostile page lacks it). A wildcard bind address is never a Host a client sends.
+  const wildcard = ["0.0.0.0", "::", "[::]"].includes(host);
   const allowedHostnames = [
-    ...(loopback ? LOOPBACK_HOSTNAMES : [normalizeHostname(host)]),
+    ...(loopback || http.MCP_HTTP_TOKEN ? LOOPBACK_HOSTNAMES : []),
+    ...(loopback || wildcard ? [] : [normalizeHostname(host)]),
     ...http.MCP_HTTP_ALLOWED_HOSTS.map(normalizeHostname),
   ];
+  if (wildcard && http.MCP_HTTP_ALLOWED_HOSTS.length === 0) {
+    logger.warn(
+      "Bound to a wildcard address with no MCP_HTTP_ALLOWED_HOSTS: only localhost, 127.0.0.1 and [::1] Host names " +
+        "are accepted. Set MCP_HTTP_ALLOWED_HOSTS to the LAN name or IP that clients use."
+    );
+  }
 
   const app = express();
   app.disable("x-powered-by");

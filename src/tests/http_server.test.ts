@@ -164,9 +164,12 @@ describe("http server bearer token", () => {
     await expect(withServer({ MCP_HTTP_HOST: "0.0.0.0" }, async () => {})).rejects.toThrow(/MCP_HTTP_TOKEN/);
   });
 
-  it("on a non-loopback bind, loopback Host names are not implicitly trusted", async () => {
-    await withServer({ MCP_HTTP_HOST: "0.0.0.0", MCP_HTTP_TOKEN: "s3cret" }, async (port) => {
-      expect((await rawPost(port, { host: "localhost", authorization: "Bearer s3cret" })).status).toBe(403);
+  it.each([["0.0.0.0"], ["::"]])("with a token on wildcard bind %s, loopback Hosts pass and others are rejected", async (bind) => {
+    await withServer({ MCP_HTTP_HOST: bind, MCP_HTTP_TOKEN: "s3cret" }, async (port) => {
+      const auth = { authorization: "Bearer s3cret" };
+      expect((await rawPost(port, { host: `localhost:${port}`, ...auth })).status).toBe(200);
+      expect((await rawPost(port, { host: "evil.example.com", ...auth })).status).toBe(403);
+      expect((await rawPost(port, { host: bind, ...auth })).status).toBe(403);
     });
   });
 });
