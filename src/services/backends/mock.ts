@@ -11,7 +11,6 @@ export class MockBackend implements Backend {
         id: "epjitsu:libusb:001:004",
         vendor: "FUJITSU",
         model: "ScanSnap",
-        saneName: "epjitsu0",
         capabilities: {
           adf: true,
           duplex: true,
