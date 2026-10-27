@@ -18,7 +18,7 @@ Purpose: Give an LLM concise, actionable context for initiating and managing sca
   high dpi is the only signal used, so a 300dpi color photo still needs an explicit
   `color_mode: "Color"`, and a 600dpi document you deliberately want in 1-bit needs an explicit
   `color_mode: "Lineart"`.
-- Source: ADF Duplex (fallback order: ADF Duplex → ADF → Flatbed).
+- Source: ADF Duplex, else ADF, else the device's first advertised source; Flatbed only when no sources are probed.
 - Page size: None (scanner/backend default) (no `-x`/`-y` unless the user sets `page_size`).
 - Output: Batched TIFF pages named `page_%04d.tiff` in the job’s `run_dir`.
 
