@@ -70,7 +70,7 @@ Key details:
 ## Additional Resources
 
 - Full project README: `https://github.com/jacksenechal/scan-mcp#readme`
-- JSON Schemas for tool inputs/outputs: `schemas/`
+- Tool input schemas: served by the server itself via MCP `tools/list` (generated from the zod definitions in `src/server/register.ts`)
 - Environment variable reference: run `npx -y scan-mcp --help`
 
 With these steps complete, `scan-mcp` will be available to any MCP-compatible client via `npx scan-mcp`.

@@ -36,14 +36,14 @@ These defaults are applied after device/capabilities are known. If the user supp
 
 Inputs for `start_scan_job` (all optional unless specified):
 - `device_id`: Pick a specific scanner; otherwise auto-select.
-- `resolution_dpi`: Desired dpi (default target 300).
+- `resolution_dpi`: Desired dpi, positive integer (default target 300; the scanner's nearest supported resolution is used).
 - `color_mode`: e.g., `Lineart`, `Gray`, `Halftone`, `Color`. color_mode defaults to Lineart
   (document-first); at >= 600dpi it defaults to Color, since high-dpi capture usually means
   artwork/photos where 1-bit destroys information. Pass color_mode explicitly to override either
   default; high dpi is the only signal used.
 - `source`: `Flatbed` | `ADF` | `ADF Duplex`.
 - `duplex`: boolean; if `true` and device supports `ADF Duplex`, it is preferred.
-- `page_size`: `Letter` | `A4` | `Legal` | `Custom` (+ `custom_size_mm`).
+- `page_size`: `Letter` | `A4` | `Legal` | `Custom` (+ `custom_size_mm`, width and height each >= 1 mm).
 - `doc_break_policy`: Advanced per-page splitting config (optional).
 - `tmp_dir`: Subdirectory of `INBOX_DIR` for `run_dir` placement (optional). Relative paths resolve against the inbox; absolute paths must be inside it; escapes (`..`, symlinks out) are rejected. Pass the same `tmp_dir` to `get_job_status`, `cancel_job`, `get_manifest`, `get_events` and `list_jobs` to reach the job.
 - `crop_carrier_sheets`: If `true`, crop pages that show a detected carrier-sheet leading-edge band and assemble documents from the cropped derivatives (optional; default `false`).

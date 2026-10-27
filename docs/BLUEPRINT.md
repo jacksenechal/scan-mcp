@@ -12,7 +12,7 @@ This document outlines the architecture and goals of the scan-mcp server.
   - `page_*.tiff` and `doc_*.tiff` files
   - `manifest.json` and `events.jsonl`
 - Clients may pass resulting TIFFs to other services (e.g., OCR) for further processing.
-- Tool contracts are defined with JSON Schemas located in `schemas/`.
+- Tool contracts are defined once, as zod shapes in `src/server/register.ts`; the MCP SDK publishes them as JSON Schema via `tools/list`.
 
 ## Tools
 - `list_devices()` → returns devices and capabilities
@@ -29,5 +29,5 @@ This document outlines the architecture and goals of the scan-mcp server.
 - Capture runs a single `scanimage --batch` command (`planScanCommand` in `src/services/backends/sane.ts`).
 - Multipage TIFFs are assembled with `tiffcp`. ImageMagick `convert` is used for carrier-sheet detection and cropping, not for assembly.
 - Document breaks: `page_count` splits a batch every N pages. Other break types are on the roadmap (`docs/ROADMAP.md`).
-- Manifest structure defined in `schemas/manifest.schema.json`.
+- Manifest structure is defined by `ManifestSchema` (zod) in `src/services/manifest.ts`; the `Manifest` type is derived from it.
 - Provenance: every page and assembled document carries its own sha256 in the manifest. The document hash is the hash of the assembled file; there is no de-duplication across jobs.

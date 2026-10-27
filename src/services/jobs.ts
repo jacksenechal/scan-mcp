@@ -8,6 +8,7 @@ import { DEFAULT_RESOLUTION_DPI, HIGH_RES_COLOR_DEFAULT_DPI } from "../constants
 import { selectDevice } from "./select.js";
 import type { StartScanInput } from "./backends/backend.js";
 export type { StartScanInput } from "./backends/backend.js";
+import type { Manifest } from "./manifest.js";
 import { detectCarrierSheet, cropCarrierSheet } from "./carrier.js";
 
 import { errorSummary, resolveJobBaseDir, assertInsideInbox, resolveJobPath, isExecaError, isNodeError, writeFileAtomic } from "./utils.js";
@@ -57,23 +58,6 @@ export type StartScanResult = {
   state: "running" | "completed" | "cancelled" | "error";
   // Why the job ended in state "error".
   error?: string;
-};
-
-type Manifest = {
-  job_id: string;
-  device_id: string | null;
-  created_at: string;
-  params: StartScanInput;
-  pages: {
-    index: number;
-    path: string;
-    sha256: string;
-    carrier_sheet?: { detected: true; band_rows: [number, number] };
-    cropped_path?: string;
-    cropped_sha256?: string;
-  }[];
-  documents: { index: number; pages: number[]; path: string; sha256: string }[];
-  state: "running" | "completed" | "cancelled" | "error";
 };
 
 async function initializeJob(effective: StartScanInput, baseDir: string, ctx: AppContext): Promise<{ runDir: string; manifest: Manifest; eventsPath: string }> {
