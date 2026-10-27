@@ -8,6 +8,7 @@ import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { createLogger, maskAuthHeaders } from "./server/logger.js";
 import { loadConfig } from "./config.js";
 import { registerScanServer } from "./server/register.js";
+import { installShutdown } from "./server/shutdown.js";
 import { selectBackend } from "./services/backends/index.js";
 import type { AppContext } from "./context.js";
 import pkg from "../package.json" with { type: "json" };
@@ -97,4 +98,15 @@ const isMain = (() => {
     return false;
   }
 })();
-if (isMain) startHttpServer();
+if (isMain) {
+  const server = startHttpServer();
+  const logger = createLogger("http", loadConfig().LOG_LEVEL);
+  installShutdown(
+    () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve());
+        server.closeAllConnections();
+      }),
+    logger
+  );
+}

@@ -2,6 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "fs";
 import os from "os";
 import path from "path";
+import { spawn } from "node:child_process";
 import type { AddressInfo } from "node:net";
 import type { Logger } from "pino";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -13,7 +14,7 @@ import { MockBackend } from "../services/backends/mock.js";
 import { SaneBackend } from "../services/backends/sane.js";
 import { registerScanServer } from "../server/register.js";
 import { startHttpServer } from "../http-server.js";
-import { startScanJob, cancelJob, getJobStatus, DeviceBusyError } from "../services/jobs.js";
+import { startScanJob, cancelJob, abortAllJobs, getJobStatus, DeviceBusyError } from "../services/jobs.js";
 
 // Concurrency, request cancellation and shutdown, driven by the fake scanimage in
 // fixtures/sane-scanner.mjs. Device "wait" blocks until terminated; "success" completes.
@@ -33,6 +34,7 @@ beforeEach(async () => {
   };
 });
 afterEach(async () => {
+  await abortAllJobs();
   vi.restoreAllMocks();
   await fs.rm(dir, { recursive: true, force: true });
 });
@@ -79,11 +81,11 @@ describe("per-device lock", () => {
     vi.spyOn(ctx.backend, "getDeviceOptions").mockImplementation(async (id) =>
       id === "wait" ? { sources: ["ADF Duplex"] } : { sources: ["Flatbed"] });
     const first = startScanJob({ device_id: "wait" }, ctx);
-    const { runDir } = await scannerRunning();
+    await scannerRunning();
     // "wait" scores highest (ADF Duplex), is busy, and must not be swapped for "success".
     await expect(startScanJob({}, ctx)).rejects.toBeInstanceOf(DeviceBusyError);
     expect(await fs.readdir(ctx.config.INBOX_DIR)).toHaveLength(1);
-    await cancelJob(path.basename(runDir), ctx);
+    await abortAllJobs();
     await first;
   });
 
@@ -193,4 +195,58 @@ describe("request cancellation", () => {
       for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
     }
   });
+});
+
+describe("abortAllJobs", () => {
+  it("cancels running jobs, waits for their final manifests, and kills the scanners", async () => {
+    const first = startScanJob({ device_id: "wait" }, ctx);
+    const { runDir, pid } = await scannerRunning();
+    await abortAllJobs();
+    expect(await manifestState(runDir)).toBe("cancelled");
+    expect(isAlive(pid)).toBe(false);
+    expect((await first).state).toBe("cancelled");
+  });
+
+  it("resolves immediately when nothing is running", async () => {
+    await expect(abortAllJobs()).resolves.toBeUndefined();
+  });
+
+  it("gives up after the timeout", async () => {
+    const mock: AppContext = { ...ctx, backend: new MockBackend() };
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let started!: () => void;
+    const running = new Promise<void>((resolve) => { started = resolve; });
+    // A scan that ignores its abort signal.
+    vi.spyOn(mock.backend, "runScan").mockImplementation(async () => { started(); await gate; return { ran: true }; });
+    const job = startScanJob({ device_id: "test" }, mock);
+    await running;
+    await abortAllJobs(10);
+    release();
+    expect((await job).state).toBe("cancelled");
+  });
+});
+
+describe("server process shutdown", () => {
+  it.each(["SIGTERM", "SIGINT", "stdin closed"] as const)("kills the running scanner child on %s", async (trigger) => {
+    const server = spawn(process.execPath, ["--import", "tsx", path.resolve(__dirname, "../mcp.ts")], {
+      stdio: ["pipe", "pipe", "ignore"],
+      env: { ...process.env, LOG_LEVEL: "silent", SCAN_MOCK: "false", INBOX_DIR: ctx.config.INBOX_DIR, SCANIMAGE_BIN: scannerBin, TIFFCP_BIN: "cp", IM_CONVERT_BIN: "false" },
+    });
+    const exited = new Promise<number | null>((resolve) => server.on("exit", (code) => resolve(code)));
+    const send = (msg: object) => server.stdin.write(JSON.stringify({ jsonrpc: "2.0", ...msg }) + "\n");
+    send({ id: 1, method: "initialize", params: { protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "t", version: "0" } } });
+    send({ method: "notifications/initialized" });
+    send({ id: 2, method: "tools/call", params: { name: "start_scan_job", arguments: { device_id: "wait" } } });
+    try {
+      const { runDir, pid } = await scannerRunning();
+      if (trigger === "stdin closed") server.stdin.end();
+      else server.kill(trigger);
+      expect(await exited).toBe(0);
+      expect(isAlive(pid)).toBe(false);
+      expect(await manifestState(runDir)).toBe("cancelled");
+    } finally {
+      server.kill("SIGKILL");
+    }
+  }, 20000);
 });

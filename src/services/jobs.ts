@@ -29,6 +29,28 @@ export class DeviceBusyError extends Error {
   }
 }
 
+// Every startScanJob call from before lock acquisition until it returns, so shutdown can
+// cancel and await all of them, including ones that have not created a job yet.
+const inflight = new Map<AbortController, Promise<unknown>>();
+
+const SHUTDOWN_TIMEOUT_MS = 5000;
+
+/**
+ * Abort every running scan and wait until each has settled into its terminal state (final
+ * manifest written, scanner child killed), or until the bounded timeout elapses.
+ */
+export async function abortAllJobs(timeoutMs = SHUTDOWN_TIMEOUT_MS): Promise<void> {
+  const pending = [...inflight.entries()];
+  for (const [controller] of pending) controller.abort();
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<void>((resolve) => { timer = setTimeout(resolve, timeoutMs); });
+  try {
+    await Promise.race([Promise.allSettled(pending.map(([, done]) => done)), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export type StartScanResult = {
   job_id: string;
   run_dir: string;
@@ -184,9 +206,12 @@ export async function startScanJob(input: StartScanInput, ctx: AppContext, reque
   const onRequestAbort = () => controller.abort();
   if (requestSignal?.aborted) controller.abort();
   else requestSignal?.addEventListener("abort", onRequestAbort, { once: true });
+  const done = runLockedJob(input, ctx, controller);
+  inflight.set(controller, done);
   try {
-    return await runLockedJob(input, ctx, controller);
+    return await done;
   } finally {
+    inflight.delete(controller);
     requestSignal?.removeEventListener("abort", onRequestAbort);
   }
 }
